@@ -1,0 +1,11 @@
+{
+    "game_title": "Keyboard Heroes",  
+    "font": "Arial",  
+    "font_size": 14,  
+    "max_players": 2,  
+    "time_limit": 300,  
+    "wpm_target": 60,  
+    "difficulty": "normal",  
+    "background_color": "#FFFFFF",  
+    "text_color": "#000000"  
+}
