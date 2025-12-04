@@ -16,16 +16,16 @@ public:
     explicit ArenaMode(int word_count = 30);
     ~ArenaMode();
 
-    // TODO: Implement start cho chế độ Arena
+    // Initialize arena with target word count and record start time
     void start() override;
 
-    // TODO: Implement xử lý đầu vào cho Arena
+    // Redirect to process_player_result for multi-player handling
     void process_input(const std::string& input) override;
 
-    // TODO: Kết thúc chế độ và tính toán kết quả
+    // Rank all players by WPM (desc) and accuracy (tie-breaker)
     void end() override;
 
-    // TODO: Hiển thị kết quả đấu trường
+    // Print ranked results with WPM and accuracy for each player
     void display_results() override;
 
     // Add a player to the arena (by id)

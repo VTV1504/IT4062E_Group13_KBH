@@ -26,8 +26,8 @@ Database::~Database() {
 bool Database::save_player_score(const std::string& player_name, int score) {
     try {
         pqxx::work txn(*conn_);
-        std::string query = "INSERT INTO leaderboard (player_name, score) VALUES ('" +
-                            txn.quote(player_name) + "', " + std::to_string(score) + ");";
+        std::string query = "INSERT INTO leaderboard (player_name, score) VALUES (" +
+                            txn.quote(player_name) + ", " + std::to_string(score) + ");";
         txn.exec(query);
         txn.commit();
         return true;
@@ -42,7 +42,7 @@ std::vector<std::string> Database::get_leaderboard() {
     std::vector<std::string> leaderboard;
     try {
         pqxx::work txn(*conn_);
-        pqxx::result result = txn.exec("SELECT player_name, score FROM leaderboard ORDER BY score DESC LIMIT 10;");
+        pqxx::result result = txn.exec("SELECT player_name, score FROM leaderboard ORDER BY score DESC LIMIT 50;");
         
         for (const auto& row : result) {
             std::string player_name = row[0].as<std::string>();

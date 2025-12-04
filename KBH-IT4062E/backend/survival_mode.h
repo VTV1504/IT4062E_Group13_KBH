@@ -19,16 +19,16 @@ public:
     SurvivalMode();
     ~SurvivalMode();
 
-    // TODO: Implement start cho chế độ Survival
+    // Verify >= 5 players and record start time for first stage
     void start() override;
 
-    // TODO: Implement xử lý đầu vào cho Survival
+    // Redirect to process_player_result for stage-based handling
     void process_input(const std::string& input) override;
 
-    // TODO: Kết thúc chế độ và lưu kết quả
+    // Finalize session when top 3 survivors determined, apply placement/bonus points
     void end() override;
 
-    // TODO: Hiển thị kết quả survival
+    // Print final standings by points and survived stages
     void display_results() override;
 
     // Player management
