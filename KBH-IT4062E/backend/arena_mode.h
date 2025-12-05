@@ -2,7 +2,7 @@
 #define ARENA_MODE_H
 
 #include "game_mode.h"
-#include <iostream>
+#include <string>
 #include <vector>
 
 struct ArenaPlayer {
@@ -13,29 +13,26 @@ struct ArenaPlayer {
 
 class ArenaMode : public GameMode {
 public:
-    explicit ArenaMode(int word_count = 30);
+    explicit ArenaMode(const std::string& text);
     ~ArenaMode();
 
-    // Initialize arena with target word count and record start time
     void start() override;
-
-    // Redirect to process_player_result for multi-player handling
     void process_input(const std::string& input) override;
-
-    // Rank all players by WPM (desc) and accuracy (tie-breaker)
     void end() override;
-
-    // Print ranked results with WPM and accuracy for each player
     void display_results() override;
 
-    // Add a player to the arena (by id)
     void add_player(const std::string& player_id);
+    void process_player_result(const std::string& player_id,
+                               const std::string& typed,
+                               double time_seconds);
 
-    // Process a single player's result (playerId, typedText, timeSeconds)
-    void process_player_result(const std::string& player_id, const std::string& typed, double time_seconds);
+    bool all_players_finished() const;
+    std::string get_results_text() const;
+
+    int get_player_count() const { return players_.size(); }
+    std::string get_target_text() const { return target_text_; }
 
 private:
-    int word_count_ = 30;
     std::vector<ArenaPlayer> players_;
 };
 

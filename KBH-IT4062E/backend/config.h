@@ -9,16 +9,24 @@ public:
     Config(const std::string& config_file);  // Khởi tạo và đọc cấu hình từ file
     ~Config();
 
-    // TODO: Phương thức đọc giá trị cấu hình
+    // Đọc giá trị cấu hình bất kỳ dưới dạng string
     std::string get_config_value(const std::string& key);
-    // Lấy địa chỉ server (ví dụ PostgreSQL hoặc địa chỉ UNIX socket)
+
+    // Lấy địa chỉ server (legacy: có thể là "localhost" hoặc "127.0.0.1")
     std::string get_server_address();
 
-    // Lấy đường dẫn socket UNIX
+    // Lấy đường dẫn socket UNIX (nếu vẫn dùng UNIX domain socket ở chỗ khác)
     std::string get_socket_path();
 
+    // ===== Thêm cho TCP server giữa nhiều máy =====
+
+    // Lấy IP server cho TCP (ưu tiên "server_ip", fallback "server_address")
+    std::string get_server_ip();
+
+    // Lấy port server cho TCP (key "server_port", mặc định 5000 nếu thiếu)
+    int get_server_port();
+
 private:
-    // TODO: Lưu trữ dữ liệu cấu hình (có thể dùng JsonCpp hoặc một thư viện JSON khác)
     void load_config(const std::string& config_file);
 
     // Dữ liệu cấu hình (JsonCpp)

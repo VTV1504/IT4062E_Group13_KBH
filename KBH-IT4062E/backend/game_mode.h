@@ -27,7 +27,13 @@ protected:
     void set_target_text(const std::string& text) { target_text_ = text; }
     void record_start() { start_time_ = std::chrono::steady_clock::now(); }
     void record_end() { end_time_ = std::chrono::steady_clock::now(); }
+
+    // Tính kết quả dựa trên start_time_ / end_time_
     Result compute_result(const std::string& typed) const;
+
+    // Tính kết quả với thời gian (giây) truyền vào trực tiếp
+    Result compute_result_with_duration(const std::string& typed,
+                                        double time_seconds) const;
 
     std::string target_text_;
     std::chrono::steady_clock::time_point start_time_;

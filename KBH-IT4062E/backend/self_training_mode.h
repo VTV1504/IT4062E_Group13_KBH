@@ -15,7 +15,6 @@ public:
     void end() override;
     void display_results() override;
 
-    // Get last result
     Result get_result() const { return last_result_; }
 
 private:

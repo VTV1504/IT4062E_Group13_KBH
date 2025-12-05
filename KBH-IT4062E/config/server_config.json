@@ -1,10 +1,12 @@
 {
     "server_address": "localhost",  
     "socket_path": "/tmp/keyboard_heroes_socket",  
-    "db_conn_str": "host=localhost dbname=keyboard_heroes user=youruser password=yourpassword",  
+    "db_conn_str": "host=localhost dbname=kbh_db user=postgres password=postgres",  
     "game_modes": [
         "SelfTraining",  
         "Arena",  
         "Survival"  
-    ]
+    ],
+    "server_ip": "0.0.0.0",
+    "server_port": 5000
 }
