@@ -1,13 +1,11 @@
 #include <iostream>
 #include "server.h"
-#include "game_manager.h"
 #include "config.h"
 #include "database.h"
 
 int main() {
     std::cout << "=== Keyboard Heroes Arena Server ===\n";
 
-    // Load config
     Config config("config/server_config.json");
     std::string server_ip   = config.get_server_ip();
     int         server_port = config.get_server_port();
@@ -16,19 +14,9 @@ int main() {
     std::cout << "[CONFIG] IP: " << server_ip
               << "  PORT: " << server_port << "\n";
 
-    // Khởi tạo database (PostgreSQL)
     Database db(db_conn_str);
 
-    // GameManager + gán Database
-    GameManager game_manager;
-    game_manager.set_database(&db);
-
-    // Khởi tạo Arena mode (sẽ lấy text từ DB)
-    game_manager.start_game("Arena");
-
-    // Tạo TCP server, truyền con trỏ GameManager
-    Server server(server_ip, server_port, &game_manager);
-
+    Server server(server_ip, server_port, &db);
     std::cout << "[SERVER] Starting...\n";
     server.start();
 

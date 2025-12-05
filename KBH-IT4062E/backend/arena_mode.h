@@ -7,8 +7,9 @@
 
 struct ArenaPlayer {
     std::string id;
-    GameMode::Result result;
+    bool ready = false;
     bool finished = false;
+    GameMode::Result result;
 };
 
 class ArenaMode : public GameMode {
@@ -21,7 +22,13 @@ public:
     void end() override;
     void display_results() override;
 
-    void add_player(const std::string& player_id);
+    bool add_player(const std::string& player_id);
+    void set_ready(const std::string& player_id);
+
+    bool all_ready() const;
+    int ready_count() const;
+    int get_player_count() const { return players_.size(); }
+
     void process_player_result(const std::string& player_id,
                                const std::string& typed,
                                double time_seconds);
@@ -29,7 +36,6 @@ public:
     bool all_players_finished() const;
     std::string get_results_text() const;
 
-    int get_player_count() const { return players_.size(); }
     std::string get_target_text() const { return target_text_; }
 
 private:
