@@ -1,15 +1,48 @@
-# ================================
-# Keyboard Heroes - Single-build Makefile
-# ================================
+# ===============================
+# Keyboard Heroes Backend
+# ===============================
 
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
+
+# Include paths
+CXXFLAGS += \
+	-Iserver \
+	-Iroom \
+	-Igamemode \
+	-Igamemode/arena \
+	-Igamemode/self_training \
+	-Igamemode/survival \
+	-Idatabase \
+	-Iconfig
+
+# Libraries
 LDFLAGS := -ljsoncpp -lpqxx -lpq
 
+# Target
 TARGET := kbh_server
 
-# Lấy tất cả file .cpp trong thư mục
-SRCS := $(wildcard *.cpp)
+# Source directories (typing_engine chưa dùng)
+SRC_DIRS := \
+	config \
+	database \
+	gamemode \
+	gamemode/arena \
+	gamemode/self_training \
+	gamemode/survival \
+	room \
+	server
+
+# Main
+MAIN_SRCS := main.cpp
+
+# Collect sources
+SRCS := $(MAIN_SRCS)
+SRCS += $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.cpp))
+
+# ===============================
+# Build rules
+# ===============================
 
 all: $(TARGET)
 
