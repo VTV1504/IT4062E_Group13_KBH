@@ -22,8 +22,8 @@ Room::Room(const std::string& id,
     RoomPlayer host{host_name, host_fd};
     players_.push_back(host);
 
-    // add host to arena
-    arena_->add_player(host_name);
+    // ✅ add host to arena (NEW API requires fd + name)
+    arena_->add_player(host_fd, host_name);
 }
 
 Room::~Room() {
@@ -46,16 +46,19 @@ bool Room::add_player(const std::string& name, int fd, std::string& err_msg) {
     RoomPlayer rp{name, fd};
     players_.push_back(rp);
 
-    if (!arena_->add_player(name)) {
-        err_msg = "ROOM_FULL";
-        return false;
-    }
+    // ✅ add player to arena (NEW API: void add_player(int, string))
+    arena_->add_player(fd, name);
 
     err_msg.clear();
     return true;
 }
 
 void Room::remove_player(int fd) {
+    // ✅ keep arena in sync
+    if (arena_) {
+        arena_->remove_player(fd);
+    }
+
     players_.erase(
         std::remove_if(players_.begin(), players_.end(),
                        [fd](const RoomPlayer& p) { return p.fd == fd; }),

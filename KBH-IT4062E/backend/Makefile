@@ -9,6 +9,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 CXXFLAGS += \
 	-Iserver \
 	-Iroom \
+	-Ityping_engine \
 	-Igamemode \
 	-Igamemode/arena \
 	-Igamemode/self_training \
@@ -31,6 +32,7 @@ SRC_DIRS := \
 	gamemode/self_training \
 	gamemode/survival \
 	room \
+	typing_engine \
 	server
 
 # Main

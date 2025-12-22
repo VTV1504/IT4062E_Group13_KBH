@@ -1,45 +1,46 @@
-#ifndef ARENA_MODE_H
-#define ARENA_MODE_H
+#pragma once
 
-#include "game_mode.h"
+#include <unordered_map>
 #include <string>
 #include <vector>
 
+#include "game_mode.h"
+#include "typing_engine.h"
+
 struct ArenaPlayer {
-    std::string id;
+    int fd;
+    std::string name;
     bool ready = false;
-    bool finished = false;
-    GameMode::Result result;
 };
 
 class ArenaMode : public GameMode {
 public:
     explicit ArenaMode(const std::string& text);
-    ~ArenaMode();
 
+    /* ===== lifecycle from GameMode ===== */
     void start() override;
-    void process_input(const std::string& input) override;
+    void process_input(const std::string& input) override;   // unused, required by interface
     void end() override;
     void display_results() override;
 
-    bool add_player(const std::string& player_id);
-    void set_ready(const std::string& player_id);
+    /* ===== Arena specific APIs (used by Server / Room) ===== */
+    void add_player(int fd, const std::string& name);
+    void remove_player(int fd);
 
+    void set_ready(int fd);
     bool all_ready() const;
-    int ready_count() const;
-    int get_player_count() const { return players_.size(); }
 
-    void process_player_result(const std::string& player_id,
-                               const std::string& typed,
-                               double time_seconds);
+    void process_player_input(int fd, const std::string& input);
 
-    bool all_players_finished() const;
-    std::string get_results_text() const;
+    bool finished() const;
+    std::string get_ranking() const;
 
-    std::string get_target_text() const { return target_text_; }
+    const std::string& get_text() const;
 
 private:
-    std::vector<ArenaPlayer> players_;
-};
+    std::string target_text;
+    std::unordered_map<int, ArenaPlayer> players;
 
-#endif
+    TypingEngine engine;
+    bool started = false;
+};

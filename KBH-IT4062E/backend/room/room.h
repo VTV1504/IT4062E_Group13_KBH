@@ -34,6 +34,7 @@ public:
 
     bool has_started() const { return game_started_; }
     void mark_started() { game_started_ = true; }
+    void mark_ended() { game_started_ = false; }
 
 private:
     std::string id_;
