@@ -121,6 +121,23 @@ void Server::handle_message(int fd, const std::string& msg) {
         send(fd, out.c_str(), out.size(), 0);
         return;
     }
+    /* =======================
+       EXIT
+       ======================= */
+    if (cmd == "EXIT") {
+        Room* room = room_manager_.get_room_of_fd(fd);
+        if (!room) {
+            std::string out = "NOT_IN_ROOM\n";
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+
+        room_manager_.remove_fd(fd);
+        std::string out = "ROOM_EXITED\n";
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
+
 
     /* =======================
        READY
@@ -136,6 +153,14 @@ void Server::handle_message(int fd, const std::string& msg) {
             std::string hint = "ALL_READY\nHOST_CAN_START\n";
             broadcast(room, hint);
         }
+        return;
+    }
+
+    if (cmd == "UNREADY") {
+        arena->set_unready(fd);
+        std::string out = "UNREADY_OK\n";
+        send(fd, out.c_str(), out.size(), 0);
+
         return;
     }
 

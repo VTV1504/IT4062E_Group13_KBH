@@ -9,7 +9,12 @@ Room* RoomManager::join_room(const std::string& room_id,
                              bool& is_host,
                              std::string& err_msg)
 {
+    if(get_room_of_fd(fd)) {
+        err_msg = "ALREADY_IN_ROOM";
+        return nullptr;
+    }
     auto it = rooms_.find(room_id);
+    
     if (it == rooms_.end()) {
         // Tạo room mới, player này là host
         auto room = std::make_unique<Room>(room_id, player_name, fd, db_);
