@@ -47,6 +47,13 @@ void ArenaMode::set_ready(int fd) {
     }
 }
 
+void ArenaMode::set_unready(int fd) {
+    auto it = players.find(fd);
+    if (it != players.end()) {
+        it->second.ready = false;
+    }
+}
+
 bool ArenaMode::all_ready() const {
     if (players.empty()) return false;
     for (const auto& kv : players) {

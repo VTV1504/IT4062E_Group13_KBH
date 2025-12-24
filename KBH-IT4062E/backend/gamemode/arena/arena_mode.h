@@ -28,6 +28,7 @@ public:
     void remove_player(int fd);
 
     void set_ready(int fd);
+    void set_unready(int fd);
     bool all_ready() const;
 
     void process_player_input(int fd, const std::string& input);
