@@ -78,6 +78,93 @@ std::vector<std::string> Database::get_leaderboard() {
     return leaderboard;
 }
 
+std::vector<Database::LeaderboardEntry> Database::get_leaderboard_entries() {
+    std::vector<LeaderboardEntry> leaderboard;
+
+    try {
+        pqxx::work txn(*conn_);
+        pqxx::result r =
+            txn.exec("SELECT player_name, score FROM leaderboard ORDER BY score DESC LIMIT 15;");
+
+        int rank = 1;
+        for (auto row : r) {
+            LeaderboardEntry entry;
+            entry.rank = rank++;
+            entry.username = row[0].as<std::string>();
+            entry.wpm = row[1].as<double>();
+            leaderboard.push_back(entry);
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error fetching leaderboard: " << e.what() << std::endl;
+    }
+
+    return leaderboard;
+}
+
+bool Database::create_account(const std::string& username, const std::string& password, std::string& err_msg) {
+    try {
+        pqxx::work txn(*conn_);
+        pqxx::result r = txn.exec(
+            "INSERT INTO app_user (username, password_hash, is_guest) VALUES (" +
+            txn.quote(username) + ", crypt(" + txn.quote(password) + ", gen_salt('bf')), false) "
+            "RETURNING user_id;");
+        if (r.empty()) {
+            err_msg = "CREATE_FAILED";
+            return false;
+        }
+        int user_id = r[0][0].as<int>();
+        txn.exec(
+            "INSERT INTO user_profile (user_id, display_name) VALUES (" +
+            std::to_string(user_id) + ", " + txn.quote(username) + ");");
+        txn.commit();
+        return true;
+    }
+    catch (const std::exception& e) {
+        err_msg = e.what();
+        std::cerr << "Error creating account: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool Database::authenticate(const std::string& username, const std::string& password, int& user_id) {
+    try {
+        pqxx::work txn(*conn_);
+        pqxx::result r = txn.exec(
+            "SELECT user_id FROM app_user WHERE username = " + txn.quote(username) +
+            " AND password_hash = crypt(" + txn.quote(password) + ", password_hash);");
+        if (r.empty()) {
+            return false;
+        }
+        user_id = r[0][0].as<int>();
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error authenticating: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool Database::change_password(const std::string& username, const std::string& old_pwd, const std::string& new_pwd) {
+    try {
+        pqxx::work txn(*conn_);
+        pqxx::result r = txn.exec(
+            "UPDATE app_user SET password_hash = crypt(" + txn.quote(new_pwd) + ", gen_salt('bf')) "
+            "WHERE username = " + txn.quote(username) +
+            " AND password_hash = crypt(" + txn.quote(old_pwd) + ", password_hash);");
+        txn.commit();
+        return r.affected_rows() == 1;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error changing password: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool Database::save_result(const std::string& username, double wpm) {
+    return save_player_score(username, static_cast<int>(wpm));
+}
+
 // -------------------------------------------
 // NEW: Get a random paragraph from DB
 // -------------------------------------------

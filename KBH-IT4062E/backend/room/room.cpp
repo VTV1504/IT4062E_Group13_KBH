@@ -19,7 +19,7 @@ Room::Room(const std::string& id,
 
     arena_ = new ArenaMode(text);
 
-    RoomPlayer host{host_name, host_fd};
+    RoomPlayer host{host_name, host_fd, 0};
     players_.push_back(host);
 
     // ✅ add host to arena (NEW API requires fd + name)
@@ -31,7 +31,7 @@ Room::~Room() {
 }
 
 bool Room::add_player(const std::string& name, int fd, std::string& err_msg) {
-    if (players_.size() >= 10) {
+    if (is_full()) {
         err_msg = "ROOM_FULL";
         return false;
     }
@@ -43,7 +43,7 @@ bool Room::add_player(const std::string& name, int fd, std::string& err_msg) {
         }
     }
 
-    RoomPlayer rp{name, fd};
+    RoomPlayer rp{name, fd, static_cast<int>(players_.size())};
     players_.push_back(rp);
 
     // ✅ add player to arena (NEW API: void add_player(int, string))
@@ -53,7 +53,8 @@ bool Room::add_player(const std::string& name, int fd, std::string& err_msg) {
     return true;
 }
 
-void Room::remove_player(int fd) {
+bool Room::remove_player(int fd) {
+    bool host_changed = false;
     // ✅ keep arena in sync
     if (arena_) {
         arena_->remove_player(fd);
@@ -64,4 +65,12 @@ void Room::remove_player(int fd) {
                        [fd](const RoomPlayer& p) { return p.fd == fd; }),
         players_.end()
     );
+
+    if (host_fd_ == fd && !players_.empty()) {
+        host_fd_ = players_.front().fd;
+        host_name_ = players_.front().name;
+        host_changed = true;
+    }
+
+    return host_changed;
 }

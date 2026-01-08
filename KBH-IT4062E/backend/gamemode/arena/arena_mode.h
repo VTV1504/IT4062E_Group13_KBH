@@ -29,12 +29,14 @@ public:
 
     void set_ready(int fd);
     void set_unready(int fd);
+    bool is_ready(int fd) const;
     bool all_ready() const;
 
-    void process_player_input(int fd, const std::string& input);
+    void process_player_input(int fd, const std::string& input, double timestamp);
 
     bool finished() const;
     std::string get_ranking() const;
+    int progress_percent(int fd) const;
 
     const std::string& get_text() const;
 

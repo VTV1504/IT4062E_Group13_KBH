@@ -54,6 +54,12 @@ void ArenaMode::set_unready(int fd) {
     }
 }
 
+bool ArenaMode::is_ready(int fd) const {
+    auto it = players.find(fd);
+    if (it == players.end()) return false;
+    return it->second.ready;
+}
+
 bool ArenaMode::all_ready() const {
     if (players.empty()) return false;
     for (const auto& kv : players) {
@@ -62,14 +68,12 @@ bool ArenaMode::all_ready() const {
     return true;
 }
 
-void ArenaMode::process_player_input(int fd, const std::string& input) {
+void ArenaMode::process_player_input(int fd, const std::string& input, double timestamp) {
     if (!started) return;
 
-    // TEMP: feed full string as keystrokes
-    double t = 0.0;
+    double t = timestamp;
     for (char c : input) {
         engine.on_key(fd, c, t);
-        t += 0.05;
     }
 }
 
@@ -113,6 +117,16 @@ std::string ArenaMode::get_ranking() const {
     }
 
     return oss.str();
+}
+
+int ArenaMode::progress_percent(int fd) const {
+    const TypingSession* session = engine.get_session(fd);
+    if (!session) return 0;
+    if (target_text.empty()) return 0;
+    double percent = 100.0 * static_cast<double>(session->progress()) / static_cast<double>(target_text.size());
+    if (percent < 0.0) percent = 0.0;
+    if (percent > 100.0) percent = 100.0;
+    return static_cast<int>(percent);
 }
 
 const std::string& ArenaMode::get_text() const {
