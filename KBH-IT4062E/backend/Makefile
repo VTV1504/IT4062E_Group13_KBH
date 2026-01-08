@@ -13,7 +13,6 @@ CXXFLAGS += \
 	-Igamemode \
 	-Igamemode/arena \
 	-Igamemode/self_training \
-	-Igamemode/survival \
 	-Idatabase \
 	-Iconfig
 
@@ -30,7 +29,6 @@ SRC_DIRS := \
 	gamemode \
 	gamemode/arena \
 	gamemode/self_training \
-	gamemode/survival \
 	room \
 	typing_engine \
 	server

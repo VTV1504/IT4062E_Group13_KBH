@@ -1,0 +1,306 @@
+You are working on a project: “Keyboard Heroes” – a real-time multiplayer typing game (LAN) with a 1 server / many clients model.
+
+============================================================
+A) CURRENT PROJECT GOALS (as of now)
+============================================================
+1) Multiplayer typing game, multiple rooms at the same time.
+2) Each client is a SDL2 C++ frontend app (render + input + screen flow).
+3) Backend server is authoritative for:
+   - Room creation/join/exit
+   - Slot assignment (8 fixed slots per room)
+   - Host selection and reassignment
+   - Ready/Start conditions
+   - Time synchronization and fairness
+   - Score calculation: WPM + accuracy + progress
+   - Game end conditions + ranking
+4) Typing engine logic is moved to FRONTEND for UX (highlighting correct/incorrect, preventing skipping words),
+   but BACKEND still computes WPM/accuracy/progress by replaying the received input events.
+
+IMPORTANT: Survival mode is removed completely (DELETE/EXCLUDE it from build and from logic).
+
+============================================================
+B) TECH CONSTRAINTS
+============================================================
+- Language: C++17
+- Networking: POSIX/BSD sockets API (AF_INET TCP) on Linux/WSL (NO websockets, NO winsock).
+- Transport framing: NDJSON (newline-delimited JSON):
+  - Every message sent over the socket is exactly one JSON object serialized to one line ending with "\n".
+  - Receiver must handle TCP streaming (messages may be split or merged in recv()) using a per-client buffer and split by '\n'.
+- JSON naming convention: snake_case everywhere.
+- Backend build system: Makefile (minimal changes allowed).
+- Frontend build system: Makefile (no CMake), SDL2 + SDL2_image + SDL2_ttf + -pthread.
+- UI resolution fixed: 1536 x 1024.
+
+============================================================
+C) CURRENT REPO / STRUCTURE (EXPECTED)
+============================================================
+
+Frontend (SDL2 client):
+./src/
+  app/              (App loop, owns renderer/window, holds global state, owns NetClient)
+  assets/           (ResourceCache: textures/fonts from ./res/)
+  core/             (ViewStack, Router, base View classes)
+  net/              (NetClient: socket thread + NDJSON + JSON parse -> events)
+  screens/          (TitleScreen, LobbyScreen, GameScreen, ProfileScreen, etc.)
+  overlays/         (SignInOverlay, GuestResultOverlay, UserResultOverlay, LeaderboardOverlay, etc.)
+  state/            (Session, AppState: user login, pending actions, current room/game state)
+./res/
+  images/           (backgrounds, logo, knight images (8), ready tick, private lock icon, etc.)
+  font/             (OTF fonts; filenames can contain spaces; loaded via path string)
+
+Backend (server):
+./backend/
+  config/
+  database/         (PostgreSQL access via libpqxx; must provide get_random_paragraph())
+  room/             (Room + RoomManager)
+  gamemode/arena/   (ArenaMode: room game session manager; ONLY mode used)
+  typing_engine/    (Replay char_events -> metrics WPM/accuracy/progress)
+  server/           (Socket accept loop + per-client reader + dispatcher)
+  main.cpp
+  Makefile
+
+============================================================
+D) NETWORK PROTOCOL (NDJSON + snake_case)
+============================================================
+
+1) Server -> Client messages (responses/broadcasts)
+------------------------------------------------------------
+(1) hello (sent immediately on connect)
+{
+  "type": "hello",
+  "client_id": 123,
+  "server_time_ms": 1000
+}
+
+(2) time_sync (reply to client’s time_sync ping)
+{
+  "type": "time_sync",
+  "client_id": 123,
+  "server_time_ms": 1050,
+  "client_time_ms": 990
+}
+
+(3) room_state (Option A: flat schema; broadcast on any room change)
+{
+  "type": "room_state",
+  "room_id": "1A2B3C",
+  "is_private": true,
+  "max_players": 8,
+  "self_client_id": 123,
+  "host_slot_idx": 0,
+  "all_ready": false,
+  "can_start": false,
+  "slots": [
+    {
+      "slot_idx": 0,
+      "occupied": true,
+      "client_id": 123,
+      "display_name": "Guest 1",
+      "is_host": true,
+      "is_ready": true,
+      "knight_idx": 0
+    },
+    ...
+    (must always provide 8 slots, slot_idx 0..7)
+  ]
+}
+
+(4) game_init (broadcast when host starts game)
+{
+  "type": "game_init",
+  "room_id": "1A2B3C",
+  "server_start_ms": 20000,
+  "duration_ms": 50000,
+  "paragraph": "full paragraph text ...",
+  "total_words": 32,
+  "players": [
+    { "slot_idx": 0, "client_id": 123, "display_name": "Guest 1" },
+    ...
+  ]
+}
+
+(5) game_state (broadcast periodically or after each input)
+{
+  "type": "game_state",
+  "room_id": "1A2B3C",
+  "server_now_ms": 21000,
+  "duration_ms": 50000,
+  "ended": false,
+  "players": [
+    {
+      "slot_idx": 0,
+      "occupied": true,
+      "word_idx": 15,
+      "latest_time_ms": 13500,
+      "progress": 0.46875,
+      "wpm": 82.4,
+      "accuracy": 97.1
+    },
+    ...
+  ]
+}
+
+(6) game_end (broadcast when timeout or all finished)
+{
+  "type": "game_end",
+  "room_id": "1A2B3C",
+  "reason": "timeout" | "all_finished",
+  "rankings": [
+    { "rank": 1, "slot_idx": 2, "client_id": 999, "display_name": "Tim", "word_idx": 32, "latest_time_ms": 49870, "wpm": 101.2, "accuracy": 96.4 },
+    ...
+  ]
+}
+
+(7) error/info
+{ "type": "error", "code": "NOT_HOST", "message": "Only host can start" }
+{ "type": "info",  "code": "OK",       "message": "..." }
+
+2) Client -> Server messages
+------------------------------------------------------------
+(1) time_sync ping (client sends multiple times before start)
+{ "type": "time_sync", "client_time_ms": 12345 }
+
+(2) set_username (after successful login in frontend, optional)
+{ "type": "set_username", "username": "Tim" }
+
+(3) create_room
+{ "type": "create_room" }
+
+(4) join_room by code
+{ "type": "join_room", "room_id": "1A2B3C" }
+
+(5) join_random (find public room not full)
+{ "type": "join_random" }
+
+(6) exit_room
+{ "type": "exit_room" }
+
+(7) ready / unready (toggle)
+{ "type": "ready" }
+{ "type": "unready" }
+
+(8) set_private (host-only)
+{ "type": "set_private", "is_private": true }
+
+(9) start_game (host-only, only when can_start==true)
+{ "type": "start_game", "duration_ms": 50000 }
+
+(10) input (sent by client ONLY when a word is committed via SPACE and goal==curr)
+- word_idx is 0-based and is the word index that these events correspond to.
+- char_events MUST include SPACE commit (SPACE is pushed into curr).
+- latest_time_ms is the timestamp of the last event (ms since game start), but server can recompute it from events.
+{
+  "type": "input",
+  "room_id": "1A2B3C",
+  "word_idx": 15,
+  "char_events": [
+    { "t_ms": 12034, "key_type": "CHAR",      "key_pressed": "h" },
+    { "t_ms": 12100, "key_type": "CHAR",      "key_pressed": "i" },
+    { "t_ms": 12150, "key_type": "SPACE",     "key_pressed": " " }
+  ]
+}
+
+key_type values:
+- "CHAR" (counts for correctness)
+- "BACKSPACE" (not counted for correctness)
+- "SPACE" (commit trigger; not counted for correctness)
+
+============================================================
+E) ROOM / LOBBY RULES (AUTHORITATIVE ON BACKEND)
+============================================================
+- Each room has exactly 8 fixed slots (slot_idx 0..7).
+- Knight assignment is fixed: knight_idx == slot_idx (player cannot choose).
+- Joining fills the lowest empty slot index.
+- Leaving empties that slot; next join fills the lowest empty slot.
+- Host is always the occupied player with smallest slot_idx.
+  If host leaves -> server reassigns host automatically.
+- Ready:
+  - Each player can ready/unready.
+  - can_start == (host exists) AND (player_count >= 2) AND (all occupied players are ready).
+- Private:
+  - Room has is_private boolean.
+  - Only host can set_private.
+  - Public rooms are eligible for join_random; private rooms are not.
+
+Frontend behavior (minimal logic):
+- Render lobby purely from room_state broadcast.
+- Highlight “self” slot (self_client_id) with special border/fill.
+- If slot is empty: render gray dash.
+- Show ready tick opacity 0/100 depending is_ready.
+- Show “( Host )” opacity 0/100 depending is_host.
+- PRIVATE UI behaves like radio/checkbox:
+  - opacity 20% when public
+  - hover 65%
+  - click toggles => send set_private => server broadcasts updated room_state
+
+============================================================
+F) GAME RULES (FRONTEND TYPING ENGINE + BACKEND SCORING)
+============================================================
+
+Frontend typing engine (UX + anti-skip):
+- After game_init:
+  - normalize paragraph whitespace; split into words by whitespace, keep punctuation.
+  - words: vector<string>
+- For each word i:
+  - Build goal stack = characters of words[i] + ' '.
+  - Maintain curr stack as user types.
+  - On CHAR: push into curr; render green for prefix match; mark first mismatch.
+  - On BACKSPACE: pop from curr.
+  - On SPACE: push ' ' into curr, then compare goal==curr:
+      - if equal: commit this word:
+          - send INPUT with word_idx=i and full char_events (including SPACE)
+          - move to next word (i++)
+          - reset curr/events
+      - if not equal: do not advance (prevents spamming space exploit)
+
+Backend scoring (authoritative):
+- Server receives INPUT word batches; server replays events to compute:
+  - correct_keypresses / total_keypresses (exclude BACKSPACE and SPACE)
+  - avg_word_accuracy_percent (Monkeytype-like: average per-word keypress accuracy; include partial word if needed)
+  - wpm = (correct_keypresses/5) / (elapsed_seconds/60)
+- Time:
+  - Must sync time before game start using time_sync (ping/pong offset).
+  - game_init provides server_start_ms; client uses offset to generate t_ms since start.
+  - duration_ms default 50000.
+- Progress:
+  - Based on words committed (word_idx progression) vs total_words.
+  - Server stores per-player current word_idx (largest committed+1 as progress).
+- End condition:
+  - All players finished (word_idx == total_words) OR timeout reached.
+- Ranking:
+  - Primary: word_idx (higher is better)
+  - Tie-break: latest_time_ms smaller wins
+
+============================================================
+G) SCREEN FLOW (FRONTEND)
+============================================================
+- TitleScreen buttons (mouse):
+  - Create Room -> send create_room -> on room_state push LobbyScreen
+  - Join Room (code/random) -> send join_room/join_random -> LobbyScreen
+  - Training -> goes directly to GameScreen regardless of login
+  - Leaderboard -> overlay/screen
+  - Signin -> SignInOverlay
+- After game ends:
+  - If user logged in -> UserResultOverlay
+  - If guest -> GuestResultOverlay with option SignIn -> if sign in succeeds, update GuestResult -> UserResult with that account.
+
+============================================================
+H) WHAT TO IMPLEMENT NEXT (CODEX TASK)
+============================================================
+1) Backend: regenerate backend modules to match the protocol and rules above:
+   - Remove survival mode completely.
+   - Implement NDJSON parsing per-client.
+   - Implement RoomManager + Room with 8 slots and host/ready/private/start rules.
+   - Implement ArenaMode + TypingEngine replay to compute WPM/accuracy/progress from INPUT char_events.
+   - Ensure Makefile still builds with minimal edits.
+2) Frontend: implement src/net module:
+   - Separate network thread for send/recv NDJSON
+   - Parse JSON snake_case into typed events: room_state/game_init/game_state/game_end/error/info
+   - UI thread polls event queue each frame and updates AppState; screens render from AppState only.
+
+Coding style:
+- Keep code modular and easy to extend for new message types (switch on msg["type"]).
+- No long comments; short human-like comments only where needed.
+- Ensure thread-safety and no crashes (no dangling pointers; avoid deadlocks; avoid interleaved send lines).
+
+Now generate/modify code accordingly while preserving the existing folder structure described above.

@@ -45,6 +45,8 @@ void Server::start() {
     while (true) {
         int client_fd = accept(server_fd_, nullptr, nullptr);
         if (client_fd < 0) continue;
+        std::cout << "New client connected: FD " << client_fd << "\n";
+        fd_to_username_[client_fd] = "Guest";
 
         std::thread(&Server::handle_client, this, client_fd).detach();
     }

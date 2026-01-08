@@ -3,6 +3,7 @@
 #include <string>
 #include "room_manager.h"
 #include "database.h"
+#include <unordered_map>
 
 class Server {
 public:
@@ -15,6 +16,8 @@ private:
 
     // helper: send to all players in a room
     void broadcast(Room* room, const std::string& msg);
+
+    std::unordered_map<int, std::string> fd_to_username_;
 
     std::string ip_;
     int port_;
