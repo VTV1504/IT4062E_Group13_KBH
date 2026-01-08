@@ -2,17 +2,47 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <cerrno>
+#include <algorithm>
 #include <iostream>
 #include <sstream>
-#include <thread>
+
+#include <jsoncpp/json/json.h>
+
+namespace {
+Json::Value make_error(const std::string& type, const std::string& msg) {
+    Json::Value out;
+    out["type"] = "error";
+    out["error_type"] = type;
+    out["error_msg"] = msg;
+    return out;
+}
+
+Json::Value make_info(const std::string& type, const std::string& msg) {
+    Json::Value out;
+    out["type"] = "info";
+    out["info_type"] = type;
+    out["info_msg"] = msg;
+    return out;
+}
+
+std::string to_string(const Json::Value& value) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    builder["emitUTF8"] = true;
+    return Json::writeString(builder, value) + "\n";
+}
+}  // namespace
 
 Server::Server(const std::string& ip, int port, Database* db)
     : ip_(ip),
       port_(port),
       server_fd_(-1),
+      db_(db),
       room_manager_(db) {}
 
 void Server::start() {
@@ -42,34 +72,62 @@ void Server::start() {
 
     std::cout << "Server running at " << ip_ << ":" << port_ << "\n";
 
-    while (true) {
-        int client_fd = accept(server_fd_, nullptr, nullptr);
-        if (client_fd < 0) continue;
-
-        std::thread(&Server::handle_client, this, client_fd).detach();
-    }
-}
-
-void Server::handle_client(int client_fd) {
-    char buffer[2048];
+    fd_set master_set;
+    FD_ZERO(&master_set);
+    FD_SET(server_fd_, &master_set);
+    int fd_max = server_fd_;
 
     while (true) {
-        int n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        if (n <= 0) {
-            room_manager_.remove_fd(client_fd);
-            close(client_fd);
-            return;
+        fd_set read_set = master_set;
+        int activity = select(fd_max + 1, &read_set, nullptr, nullptr, nullptr);
+        if (activity < 0) {
+            if (errno == EINTR) continue;
+            perror("select");
+            break;
         }
 
-        buffer[n] = '\0';
-        std::string msg(buffer);
+        for (int fd = 0; fd <= fd_max; ++fd) {
+            if (!FD_ISSET(fd, &read_set)) continue;
 
-        // (optional) trim trailing \r\n
-        while (!msg.empty() && (msg.back() == '\n' || msg.back() == '\r')) {
-            msg.pop_back();
+            if (fd == server_fd_) {
+                int client_fd = accept(server_fd_, nullptr, nullptr);
+                if (client_fd < 0) {
+                    continue;
+                }
+
+                FD_SET(client_fd, &master_set);
+                fd_max = std::max(fd_max, client_fd);
+                clients_.insert(client_fd);
+                recv_buffers_[client_fd];
+                client_names_[client_fd] = "Guest_" + std::to_string(client_fd);
+            } else {
+                char buffer[4096];
+                int n = recv(fd, buffer, sizeof(buffer), 0);
+                if (n <= 0) {
+                    FD_CLR(fd, &master_set);
+                    clients_.erase(fd);
+                    recv_buffers_.erase(fd);
+                    client_names_.erase(fd);
+                    handle_disconnect(fd);
+                    close(fd);
+                    continue;
+                }
+
+                recv_buffers_[fd].append(buffer, n);
+                auto& pending = recv_buffers_[fd];
+                size_t pos = 0;
+                while ((pos = pending.find('\n')) != std::string::npos) {
+                    std::string line = pending.substr(0, pos);
+                    pending.erase(0, pos + 1);
+                    while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
+                        line.pop_back();
+                    }
+                    if (!line.empty()) {
+                        handle_message(fd, line);
+                    }
+                }
+            }
         }
-
-        handle_message(client_fd, msg);
     }
 }
 
@@ -80,138 +138,257 @@ void Server::broadcast(Room* room, const std::string& msg) {
     }
 }
 
+void Server::handle_disconnect(int fd) {
+    auto result = room_manager_.remove_fd(fd);
+    if (result.room && !result.room_deleted) {
+        Json::Value state = room_manager_.build_room_state(result.room);
+        broadcast(result.room, to_string(state));
+    }
+}
+
 void Server::handle_message(int fd, const std::string& msg) {
+    Json::Value root;
+    Json::CharReaderBuilder builder;
+    std::string errs;
     std::istringstream iss(msg);
-    std::string cmd;
-    iss >> cmd;
+    if (!Json::parseFromStream(builder, iss, &root, &errs)) {
+        std::string out = to_string(make_error("bad_json", errs));
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
 
-    /* =======================
-       JOIN <name> <room_id>
-       ======================= */
-    if (cmd == "JOIN") {
-        std::string name, room_id;
-        iss >> name >> room_id;
+    const std::string msg_type = root.get("type", "").asString();
+    Json::Value payload = root.isMember("payload") ? root["payload"] : root;
 
+    if (msg_type == "SIGN_IN") {
+        const std::string username = payload.get("username", "").asString();
+        const std::string passwd = payload.get("passwd", "").asString();
+        int user_id = 0;
+        if (!db_ || !db_->authenticate(username, passwd, user_id)) {
+            std::string out = to_string(make_error("auth_failed", "invalid credentials"));
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+        client_names_[fd] = username;
+        Json::Value out;
+        out["type"] = "authentication";
+        out["client_fd"] = fd;
+        out["username"] = username;
+        std::string response = to_string(out);
+        send(fd, response.c_str(), response.size(), 0);
+        return;
+    }
+
+    if (msg_type == "CREATE_ACC") {
+        const std::string username = payload.get("username", "").asString();
+        const std::string passwd = payload.get("passwd", "").asString();
+        std::string error;
+        if (!db_ || !db_->create_account(username, passwd, error)) {
+            std::string out = to_string(make_error("create_account_failed", error.empty() ? "create account failed" : error));
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+        std::string out = to_string(make_info("create_account_ok", "account created"));
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
+
+    if (msg_type == "CHANGE_PASSWD") {
+        const std::string username = payload.get("username", client_names_[fd]).asString();
+        const std::string old_pwd = payload.get("old_pwd", "").asString();
+        const std::string new_pwd = payload.get("new_pwd", "").asString();
+        if (!db_ || !db_->change_password(username, old_pwd, new_pwd)) {
+            std::string out = to_string(make_error("change_password_failed", "password mismatch"));
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+        std::string out = to_string(make_info("change_password_ok", "password updated"));
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
+
+    if (msg_type == "SAVE_RESULT") {
+        const std::string username = payload.get("username", client_names_[fd]).asString();
+        double wpm = payload.get("wpm", 0.0).asDouble();
+        if (!db_ || !db_->save_result(username, wpm)) {
+            std::string out = to_string(make_error("save_result_failed", "could not save result"));
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+        std::string out = to_string(make_info("save_result_ok", "result saved"));
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
+
+    if (msg_type == "LEADERBOARD") {
+        Json::Value response;
+        response["type"] = "leaderboard";
+        Json::Value top(Json::arrayValue);
+        if (db_) {
+            auto entries = db_->get_leaderboard_entries();
+            for (const auto& entry : entries) {
+                Json::Value item;
+                item["rank"] = entry.rank;
+                item["username"] = entry.username;
+                item["wpm"] = entry.wpm;
+                top.append(item);
+            }
+        }
+        response["top15"] = top;
+        std::string out = to_string(response);
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
+
+    if (msg_type == "CREATE") {
+        const std::string name = payload.get("username", client_names_[fd]).asString();
         bool is_host = false;
         std::string err;
-        Room* room = room_manager_.join_room(room_id, name, fd, is_host, err);
+        std::string room_id;
+        Room* room = room_manager_.create_room(name, fd, room_id, is_host, err);
+        if (!room) {
+            std::string out = to_string(make_error("create_failed", err.empty() ? "create failed" : err));
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+        Json::Value state = room_manager_.build_room_state(room);
+        std::string out = to_string(state);
+        send(fd, out.c_str(), out.size(), 0);
+        return;
+    }
+
+    if (msg_type == "JOIN") {
+        const std::string join_type = payload.get("join_type", "code").asString();
+        const std::string room_id = payload.get("room_id", "").asString();
+        const std::string name = payload.get("username", client_names_[fd]).asString();
+        bool is_host = false;
+        std::string err;
+        Room* room = nullptr;
+
+        if (join_type == "random") {
+            room = room_manager_.join_random_room(name, fd, is_host, err);
+            if (!room) {
+                room = room_manager_.create_room(name, fd, err, is_host);
+            }
+        } else {
+            room = room_manager_.join_room_by_code(room_id, name, fd, is_host, err);
+        }
 
         if (!room) {
-            std::string out = err.empty() ? "JOIN_FAILED\n" : (err + "\n");
+            std::string out = to_string(make_error("join_failed", err.empty() ? "join failed" : err));
             send(fd, out.c_str(), out.size(), 0);
             return;
         }
 
-        std::string out = "JOIN_OK\n";
-        if (is_host) out += "HOST\n";
-        send(fd, out.c_str(), out.size(), 0);
+        Json::Value state = room_manager_.build_room_state(room);
+        std::string out = to_string(state);
+        broadcast(room, out);
         return;
     }
 
     Room* room = room_manager_.get_room_of_fd(fd);
     if (!room) {
-        std::string out = "NOT_IN_ROOM\n";
+        std::string out = to_string(make_error("not_in_room", "client not in room"));
         send(fd, out.c_str(), out.size(), 0);
         return;
     }
 
     ArenaMode* arena = room->arena();
     if (!arena) {
-        std::string out = "NO_ARENA\n";
+        std::string out = to_string(make_error("no_arena", "arena not available"));
         send(fd, out.c_str(), out.size(), 0);
         return;
     }
-    /* =======================
-       EXIT
-       ======================= */
-    if (cmd == "EXIT") {
-        Room* room = room_manager_.get_room_of_fd(fd);
-        if (!room) {
-            std::string out = "NOT_IN_ROOM\n";
+
+    if (msg_type == "EXIT") {
+        auto result = room_manager_.remove_fd(fd);
+        std::string out = to_string(make_info("room_exited", "left room"));
+        send(fd, out.c_str(), out.size(), 0);
+        if (result.room && !result.room_deleted) {
+            Json::Value state = room_manager_.build_room_state(result.room);
+            broadcast(result.room, to_string(state));
+        }
+        return;
+    }
+
+    if (msg_type == "SET_PRIVATE") {
+        if (!room->is_host(fd)) {
+            std::string out = to_string(make_error("not_host", "only host can set private"));
             send(fd, out.c_str(), out.size(), 0);
             return;
         }
-
-        room_manager_.remove_fd(fd);
-        std::string out = "ROOM_EXITED\n";
-        send(fd, out.c_str(), out.size(), 0);
+        bool flag = payload.get("private_flag", 0).asBool();
+        room->set_private(flag);
+        Json::Value state = room_manager_.build_room_state(room);
+        broadcast(room, to_string(state));
         return;
     }
 
-
-    /* =======================
-       READY
-       ======================= */
-    if (cmd == "READY") {
+    if (msg_type == "READY") {
         arena->set_ready(fd);
-        std::string out = "READY_OK\n";
-        send(fd, out.c_str(), out.size(), 0);
-
-        // Không auto-start để tránh mơ hồ.
-        // Host phải gửi START khi all_ready.
-        if (arena->all_ready()) {
-            std::string hint = "ALL_READY\nHOST_CAN_START\n";
-            broadcast(room, hint);
-        }
+        Json::Value state = room_manager_.build_room_state(room);
+        broadcast(room, to_string(state));
         return;
     }
 
-    if (cmd == "UNREADY") {
+    if (msg_type == "UNREADY") {
         arena->set_unready(fd);
-        std::string out = "UNREADY_OK\n";
-        send(fd, out.c_str(), out.size(), 0);
-
+        Json::Value state = room_manager_.build_room_state(room);
+        broadcast(room, to_string(state));
         return;
     }
 
-    /* =======================
-       START   (only host)
-       ======================= */
-    if (cmd == "START") {
+    if (msg_type == "START") {
         if (!room->is_host(fd)) {
-            std::string out = "ONLY_HOST_CAN_START\n";
+            std::string out = to_string(make_error("not_host", "only host can start"));
+            send(fd, out.c_str(), out.size(), 0);
+            return;
+        }
+        if (room->player_count() < 2) {
+            std::string out = to_string(make_error("not_enough_players", "need at least 2 players"));
             send(fd, out.c_str(), out.size(), 0);
             return;
         }
         if (!arena->all_ready()) {
-            std::string out = "NOT_ALL_READY\n";
+            std::string out = to_string(make_error("not_all_ready", "not all ready"));
             send(fd, out.c_str(), out.size(), 0);
             return;
         }
         if (room->has_started()) {
-            std::string out = "ALREADY_STARTED\n";
+            std::string out = to_string(make_error("already_started", "game already started"));
             send(fd, out.c_str(), out.size(), 0);
             return;
         }
 
         room->mark_started();
         arena->start();
-
-        std::string start_msg = "GAME_START\n" + arena->get_text() + "\n";
-        broadcast(room, start_msg);
+        Json::Value init = room_manager_.build_game_init(room);
+        broadcast(room, to_string(init));
         return;
     }
 
-    /* =======================
-       INPUT <full_text>
-       (tạm thời vẫn full-string + Enter)
-       ======================= */
-    if (cmd == "INPUT") {
-        std::string content;
-        std::getline(iss, content);
-        if (!content.empty() && content[0] == ' ')
-            content.erase(0, 1);
+    if (msg_type == "INPUT") {
+        Json::Value event = payload["char_event"];
+        std::string key_type = event.get("key_type", "").asString();
+        std::string key_press = event.get("key_press", "").asString();
+        double timestamp = event.get("timestamp", payload.get("latest_time", 0.0)).asDouble();
 
-        arena->process_player_input(fd, content);
+        if (key_type == "SPACE") {
+            arena->process_player_input(fd, " ", timestamp);
+        } else if (key_type == "CHARACTER") {
+            if (!key_press.empty()) {
+                arena->process_player_input(fd, std::string(1, key_press[0]), timestamp);
+            }
+        }
 
+        Json::Value state = room_manager_.build_game_state(room);
+        broadcast(room, to_string(state));
         if (arena->finished()) {
-            std::string result = "GAME_END\n" + arena->get_ranking();
-            broadcast(room, result);
             room->mark_ended();
         }
         return;
     }
 
-    std::string out = "UNKNOWN_COMMAND\n";
+    std::string out = to_string(make_error("unknown_command", "unknown command"));
     send(fd, out.c_str(), out.size(), 0);
 }
