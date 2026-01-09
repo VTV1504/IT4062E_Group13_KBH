@@ -75,7 +75,14 @@ void Server::handle_client(int client_fd) {
         int n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
         if (n <= 0) {
             std::cout << "[SERVER] Client disconnected: FD=" << client_fd << "\n";
-            room_manager_.remove_fd(client_fd);
+            
+            // Remove from room and broadcast update to remaining players
+            Room* room = room_manager_.remove_fd(client_fd);
+            if (room) {
+                std::cout << "[SERVER] Broadcasting room_state after disconnect\n";
+                broadcast_room_state(room);
+            }
+            
             clients_.erase(client_fd);
             close(client_fd);
             return;
@@ -330,11 +337,12 @@ void Server::on_exit_room(int fd) {
         return;
     }
     
-    room_manager_.remove_fd(fd);
+    // Remove player and get room pointer (nullptr if room deleted)
+    room = room_manager_.remove_fd(fd);
     
-    // Room might be deleted if empty
-    // If room still exists, broadcast new state
-    if (room->player_count() > 0) {
+    // If room still exists (has players), broadcast new state
+    if (room) {
+        std::cout << "[SERVER] Broadcasting room_state after exit_room\n";
         broadcast_room_state(room);
     }
 }

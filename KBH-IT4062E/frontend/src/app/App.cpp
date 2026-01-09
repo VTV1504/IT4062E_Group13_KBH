@@ -1,17 +1,32 @@
 #include "App.h"
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <iostream>
 
 #include "../ui/UiTheme.h"
+#include "../config/ClientConfig.h"
+#include "../overlays/JoinRoomOverlay.h"
+#include "../core/Router.h"
 
 bool App::init() {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) return false;
+    std::cout << "[App] Initializing SDL...\n";
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        std::cerr << "[App] SDL_Init failed: " << SDL_GetError() << "\n";
+        return false;
+    }
 
     // PNG support is enough for now
-    if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) return false;
+    if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
+        std::cerr << "[App] IMG_Init failed: " << IMG_GetError() << "\n";
+        return false;
+    }
 
-    if (TTF_Init() != 0) return false;
+    if (TTF_Init() != 0) {
+        std::cerr << "[App] TTF_Init failed: " << TTF_GetError() << "\n";
+        return false;
+    }
 
+    std::cout << "[App] Creating window...\n";
     win = SDL_CreateWindow(
         "Keyboard Hero",
         SDL_WINDOWPOS_CENTERED,
@@ -20,19 +35,41 @@ bool App::init() {
         UiTheme::DesignH,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
-    if (!win) return false;
+    if (!win) {
+        std::cerr << "[App] SDL_CreateWindow failed: " << SDL_GetError() << "\n";
+        return false;
+    }
 
+    std::cout << "[App] Creating renderer...\n";
     ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!ren) return false;
+    if (!ren) {
+        std::cerr << "[App] SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
+        return false;
+    }
 
     // Use a fixed logical resolution for all screens/overlays
+    // This maintains 1536x1024 aspect ratio with black bars on any window size
     SDL_RenderSetLogicalSize(ren, UiTheme::DesignW, UiTheme::DesignH);
-
+    SDL_RenderSetIntegerScale(ren, SDL_FALSE); // Allow non-integer scaling for smooth resize
+    
+    std::cout << "[App] Initializing resources...\n";
     res.init(ren);
     
-    // Connect to server (optional - can be done later from UI)
-    // net.connect("127.0.0.1", 5000);
+    // Connect to server using config
+    std::cout << "[App] Loading config...\n";
+    ClientConfig cfg = ClientConfig::load();
+    std::cout << "[App] Connecting to server...\n";
+    if (!net.connect(cfg.server_ip, cfg.server_port)) {
+        std::cerr << "[App] Warning: Failed to connect to server at " 
+                  << cfg.server_ip << ":" << cfg.server_port 
+                  << ". Game will run in offline mode.\n";
+        // Continue anyway - some features may require connection
+    } else {
+        std::cout << "[App] Connected to server at " 
+                  << cfg.server_ip << ":" << cfg.server_port << "\n";
+    }
     
+    std::cout << "[App] Initialization complete!\n";
     return true;
 }
 
@@ -69,11 +106,35 @@ void App::run() {
                 quitRequested = true;
                 break;
             }
+            
+            // Handle fullscreen toggle (F11 or Alt+Enter)
+            if (e.type == SDL_KEYDOWN) {
+                bool toggleFullscreen = false;
+                
+                if (e.key.keysym.sym == SDLK_F11) {
+                    toggleFullscreen = true;
+                } else if (e.key.keysym.sym == SDLK_RETURN && 
+                          (e.key.keysym.mod & KMOD_ALT)) {
+                    toggleFullscreen = true;
+                }
+                
+                if (toggleFullscreen) {
+                    Uint32 flags = SDL_GetWindowFlags(win);
+                    if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+                        SDL_SetWindowFullscreen(win, 0);
+                    } else {
+                        SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                    }
+                    continue; // Don't pass this event to views
+                }
+            }
+            
             viewStack.handleEvent(e);
         }
         
-        // Poll network events
-        while (net.has_events()) {
+        // Poll network events (limit to 10 per frame to avoid blocking SDL events)
+        int maxNetEvents = 10;
+        while (net.has_events() && maxNetEvents-- > 0) {
             auto event = net.poll_event();
             if (event) {
                 // Process network events
@@ -85,15 +146,36 @@ void App::run() {
                     case NetEventType::Hello:
                         // Connection established
                         break;
-                    case NetEventType::RoomState:
-                        // Room state updated
+                    case NetEventType::RoomState: {
+                        // Update room state
+                        auto* rs = static_cast<RoomStateEvent*>(event.get());
+                        st.setRoomState(*rs);
+                        
+                        // If we're in JoinRoomOverlay, navigate to LobbyScreen
+                        View* topView = viewStack.top();
+                        if (topView && dynamic_cast<JoinRoomOverlay*>(topView)) {
+                            std::cout << "[App] Join successful, navigating to Lobby\n";
+                            defer([this]() {
+                                rt.change(RouteId::Lobby);
+                            });
+                        }
                         break;
+                    }
                     case NetEventType::GameInit:
                         // Game starting
                         break;
                     case NetEventType::Error: {
                         auto* err = static_cast<ErrorEvent*>(event.get());
-                        // Log error: err->code, err->message
+                        std::cerr << "[App] Server error: " << err->code << " - " << err->message << "\n";
+                        
+                        // If we're in JoinRoomOverlay, show error
+                        View* topView = viewStack.top();
+                        if (topView) {
+                            JoinRoomOverlay* joinOverlay = dynamic_cast<JoinRoomOverlay*>(topView);
+                            if (joinOverlay) {
+                                joinOverlay->set_error(err->message);
+                            }
+                        }
                         break;
                     }
                     default:
@@ -108,6 +190,7 @@ void App::run() {
 
         viewStack.update(dt);
 
+        SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
         SDL_RenderClear(ren);
         viewStack.render(ren);
         SDL_RenderPresent(ren);

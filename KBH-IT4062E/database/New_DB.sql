@@ -3,7 +3,6 @@
 -- - accounts (sign in / create / change password)
 -- - paragraphs (random paragraph for game_init)
 -- - results (save + leaderboard)
-
 BEGIN;
 
 -- For password hashing with crypt()/gen_salt()

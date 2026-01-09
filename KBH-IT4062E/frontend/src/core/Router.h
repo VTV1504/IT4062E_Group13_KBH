@@ -9,6 +9,7 @@ enum class RouteId {
     Profile,
 
     EnterRoomOverlay,
+    JoinRoomOverlay,
     LeaderboardOverlay,
     SignInOverlay,
     CreateAccountOverlay,

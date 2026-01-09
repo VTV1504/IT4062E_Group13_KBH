@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cerrno>
 #include <iostream>
 
 NetClient::NetClient() {}
@@ -16,17 +17,26 @@ bool NetClient::connect(const std::string& ip, int port) {
     
     sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd_ < 0) {
-        std::cerr << "[NetClient] Failed to create socket\n";
+        std::cerr << "[NetClient] Failed to create socket: " << strerror(errno) << "\n";
         return false;
     }
     
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
+    
+    if (inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) <= 0) {
+        std::cerr << "[NetClient] Invalid address: " << ip << "\n";
+        close(sockfd_);
+        sockfd_ = -1;
+        return false;
+    }
+    
+    std::cout << "[NetClient] Attempting to connect to " << ip << ":" << port << "...\n";
     
     if (::connect(sockfd_, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cerr << "[NetClient] Failed to connect to " << ip << ":" << port << "\n";
+        std::cerr << "[NetClient] Failed to connect to " << ip << ":" << port 
+                  << " - " << strerror(errno) << "\n";
         close(sockfd_);
         sockfd_ = -1;
         return false;

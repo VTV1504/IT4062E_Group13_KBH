@@ -24,7 +24,9 @@ public:
     Room* get_room_of_fd(int fd) const;
     
     // Remove fd from room
-    void remove_fd(int fd);
+    // Returns the Room* if room still has players (for broadcasting),
+    // or nullptr if room was deleted (empty)
+    Room* remove_fd(int fd);
 
 private:
     std::string generate_room_id();

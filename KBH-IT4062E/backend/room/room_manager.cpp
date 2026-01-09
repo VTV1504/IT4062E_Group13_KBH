@@ -79,9 +79,9 @@ Room* RoomManager::get_room_of_fd(int fd) const {
     return it->second;
 }
 
-void RoomManager::remove_fd(int fd) {
+Room* RoomManager::remove_fd(int fd) {
     auto it = fd_to_room_.find(fd);
-    if (it == fd_to_room_.end()) return;
+    if (it == fd_to_room_.end()) return nullptr;
 
     Room* room = it->second;
     fd_to_room_.erase(it);
@@ -91,7 +91,10 @@ void RoomManager::remove_fd(int fd) {
     // Delete room if empty
     if (room->player_count() == 0) {
         rooms_.erase(room->id());
+        return nullptr; // Room deleted
     }
+    
+    return room; // Room still has players
 }
 
 std::string RoomManager::generate_room_id() {

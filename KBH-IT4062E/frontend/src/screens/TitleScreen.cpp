@@ -278,9 +278,9 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
                 app->network().send_create_room();
                 app->router().change(RouteId::Lobby);
             }
-            // Join Room: giữ nguyên, chỉ mở overlay
+            // Join Room: mở JoinRoomOverlay mới
             else if (hoveredMenu == 1) {
-                app->router().push(RouteId::EnterRoomOverlay);
+                app->router().push(RouteId::JoinRoomOverlay);
             }
             // Training: gửi game_init, set pending mode, chuyển thẳng vào game
             else if (hoveredMenu == 2) {
