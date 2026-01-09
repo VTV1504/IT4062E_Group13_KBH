@@ -3,9 +3,9 @@
 #include <string>
 #include <unordered_map>
 #include <chrono>
-#include <json/json.h>
+#include <jsoncpp/json/json.h>
 #include "room_manager.h"
-#include "database.h"
+#include "../database/database.h"
 
 class Server {
 public:

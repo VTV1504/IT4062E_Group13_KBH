@@ -3,8 +3,8 @@
 
 #include <string>
 #include <vector>
-#include <json/json.h>
-#include "database.h"
+#include <jsoncpp/json/json.h>
+#include "../database/database.h"
 
 struct RoomSlot {
     bool occupied = false;
