@@ -8,6 +8,7 @@
 #include "../assets/ResourceCache.h"
 #include "../state/Session.h"
 #include "../state/AppState.h"
+#include "../net/NetClient.h"
 
 class App {
 public:
@@ -24,6 +25,7 @@ public:
     AppState& state() { return st; }
     ViewStack& views() { return viewStack; }
     Router& router() { return rt; }
+    NetClient& network() { return net; }
 
     // Defer navigation/actions to run AFTER event processing (prevents use-after-free)
     void defer(std::function<void()> fn);
@@ -38,6 +40,7 @@ private:
     ResourceCache res;
     Session sess;
     AppState st;
+    NetClient net;
 
     ViewStack viewStack{this};
     Router rt{this};

@@ -29,6 +29,10 @@ bool App::init() {
     SDL_RenderSetLogicalSize(ren, UiTheme::DesignW, UiTheme::DesignH);
 
     res.init(ren);
+    
+    // Connect to server (optional - can be done later from UI)
+    // net.connect("127.0.0.1", 5000);
+    
     return true;
 }
 
@@ -67,6 +71,37 @@ void App::run() {
             }
             viewStack.handleEvent(e);
         }
+        
+        // Poll network events
+        while (net.has_events()) {
+            auto event = net.poll_event();
+            if (event) {
+                // Process network events
+                // Views can access via app->network().poll_event()
+                // For now, just consume them in views or handle here
+                
+                // Example: print event types for debugging
+                switch (event->type) {
+                    case NetEventType::Hello:
+                        // Connection established
+                        break;
+                    case NetEventType::RoomState:
+                        // Room state updated
+                        break;
+                    case NetEventType::GameInit:
+                        // Game starting
+                        break;
+                    case NetEventType::Error: {
+                        auto* err = static_cast<ErrorEvent*>(event.get());
+                        // Log error: err->code, err->message
+                        break;
+                    }
+                    default:
+                        break;
+                }
+                // Store event or push to AppState for views to consume
+            }
+        }
 
         // Important: execute navigation/actions AFTER event processing to avoid use-after-free
         processDeferred();
@@ -80,6 +115,9 @@ void App::run() {
 }
 
 void App::shutdown() {
+    // Disconnect from server
+    net.disconnect();
+    
     // Clean up resources safely
     res.shutdown();
 

@@ -28,9 +28,7 @@ SRC_DIRS := \
 	database \
 	gamemode \
 	gamemode/arena \
-	gamemode/self_training \
 	room \
-	typing_engine \
 	server
 
 # Main
