@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
 
 static bool pointInRect(int x, int y, const SDL_Rect& r) {
     return (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
@@ -226,7 +227,13 @@ void TitleScreen::onEnter() {
         menuText.push_back(makeText(s, 64));
         menuRect.push_back(SDL_Rect{0,0,0,0});
     }
-    signText = makeText("Sign in / Sign up", 58);
+    
+    // Update sign text based on login state
+    if (app->session().isLoggedIn()) {
+        signText = makeText(app->session().user().username, 58);
+    } else {
+        signText = makeText("Sign in / Sign up", 58);
+    }
 
     // ====== TỌA ĐỘ THEO BẠN ======
     // Create Room: x=77, y=403
@@ -266,10 +273,29 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
         updateHoverFromMouse(e.button.x, e.button.y);
 
         if (hoveredMenu != -1) {
-            if (hoveredMenu == 0) app->router().change(RouteId::Lobby);
-            else if (hoveredMenu == 1) app->router().push(RouteId::EnterRoomOverlay);
-            else if (hoveredMenu == 2) { app->state().setPendingMode(GameMode::Training); app->router().change(RouteId::Game); }
-            else if (hoveredMenu == 3) app->router().push(RouteId::LeaderboardOverlay);
+            // Create Room: gửi create_room và chuyển màn lobby
+            if (hoveredMenu == 0) {
+                app->network().send_create_room();
+                app->router().change(RouteId::Lobby);
+            }
+            // Join Room: giữ nguyên, chỉ mở overlay
+            else if (hoveredMenu == 1) {
+                app->router().push(RouteId::EnterRoomOverlay);
+            }
+            // Training: gửi game_init, set pending mode, chuyển thẳng vào game
+            else if (hoveredMenu == 2) {
+                // Gửi message game_init cho self_training mode
+                // Self training mode: max_player=1, slot=1, đi thẳng vào game không qua lobby
+                app->state().setPendingMode(GameMode::Training);
+                // TODO: Có thể cần gửi message game_init với parameters cho self_training
+                // app->network().send_game_init(...); // Implement khi server hỗ trợ
+                app->router().change(RouteId::Game);
+            }
+            // Leaderboard: gửi leaderboard request
+            else if (hoveredMenu == 3) {
+                app->network().send_leaderboard();
+                app->router().push(RouteId::LeaderboardOverlay);
+            }
             return;
         }
 
@@ -286,6 +312,19 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
 }
 
 void TitleScreen::render(SDL_Renderer* r) {
+    // Update sign text based on current login state (in case it changed)
+    static bool lastLoginState = false;
+    bool currentLoginState = app->session().isLoggedIn();
+    if (lastLoginState != currentLoginState) {
+        destroyText(signText);
+        if (currentLoginState) {
+            signText = makeText(app->session().user().username, 58);
+        } else {
+            signText = makeText("Sign in / Sign up", 58);
+        }
+        lastLoginState = currentLoginState;
+    }
+    
     // background
     if (bg) {
         SDL_Rect dst{0,0,UiTheme::DesignW,UiTheme::DesignH};

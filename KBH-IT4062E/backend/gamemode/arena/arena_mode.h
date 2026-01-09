@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <jsoncpp/json/json.h>
 
 #include "game_mode.h"
 #include "typing_engine.h"
@@ -31,7 +32,7 @@ public:
     void set_unready(int fd);
     bool all_ready() const;
 
-    void process_player_input(int fd, const std::string& input);
+    void process_player_input(int fd, int word_idx, const Json::Value& char_events, int64_t latest_time_ms);
 
     bool finished() const;
     std::string get_ranking() const;

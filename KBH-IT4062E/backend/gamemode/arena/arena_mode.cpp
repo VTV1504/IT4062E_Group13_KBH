@@ -62,15 +62,9 @@ bool ArenaMode::all_ready() const {
     return true;
 }
 
-void ArenaMode::process_player_input(int fd, const std::string& input) {
+void ArenaMode::process_player_input(int fd, int word_idx, const Json::Value& char_events, int64_t latest_time_ms) {
     if (!started) return;
-
-    // TEMP: feed full string as keystrokes
-    double t = 0.0;
-    for (char c : input) {
-        engine.on_key(fd, c, t);
-        t += 0.05;
-    }
+    engine.process_input(fd, word_idx, char_events, latest_time_ms);
 }
 
 bool ArenaMode::finished() const {
@@ -80,6 +74,8 @@ bool ArenaMode::finished() const {
 std::string ArenaMode::get_ranking() const {
     struct Result {
         std::string name;
+        int word_idx;
+        int64_t latest_time_ms;
         double wpm;
         double acc;
     };
@@ -87,20 +83,22 @@ std::string ArenaMode::get_ranking() const {
     std::vector<Result> results;
 
     for (const auto& kv : players) {
-        const TypingSession* session = engine.get_session(kv.first);
-        if (!session) continue;
+        const TypingEngine::PlayerMetrics* pm = engine.get_session(kv.first);
+        if (!pm) continue;
 
-        const TypingMetrics& m = session->metrics();
         results.push_back({
             kv.second.name,
-            m.wpm(),
-            m.accuracy()
+            pm->word_idx,
+            pm->latest_time_ms,
+            pm->wpm,
+            pm->accuracy
         });
     }
 
     std::sort(results.begin(), results.end(),
               [](const Result& a, const Result& b) {
-                  return a.wpm > b.wpm;
+                  if (a.word_idx != b.word_idx) return a.word_idx > b.word_idx;
+                  return a.latest_time_ms < b.latest_time_ms;
               });
 
     std::ostringstream oss;
@@ -108,6 +106,7 @@ std::string ArenaMode::get_ranking() const {
     for (const auto& r : results) {
         oss << rank++ << ". "
             << r.name
+            << " | Words: " << r.word_idx
             << " | WPM: " << (int)r.wpm
             << " | Acc: " << (int)r.acc << "%\n";
     }

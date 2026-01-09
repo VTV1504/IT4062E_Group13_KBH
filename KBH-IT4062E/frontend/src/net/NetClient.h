@@ -5,7 +5,7 @@
 #include <thread>
 #include <memory>
 #include <atomic>
-#include <json/json.h>
+#include <jsoncpp/json/json.h>
 #include "NetEvents.h"
 
 class NetClient {
@@ -34,6 +34,7 @@ public:
     void send_set_private(bool is_private);
     void send_start_game(int duration_ms = 50000);
     void send_input(const std::string& room_id, int word_idx, const Json::Value& char_events);
+    void send_leaderboard();
     
     // Poll events from queue (call from UI thread)
     std::unique_ptr<NetEvent> poll_event();

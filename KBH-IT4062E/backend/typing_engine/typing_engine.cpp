@@ -1,34 +1,93 @@
 #include "typing_engine.h"
+#include <sstream>
+#include <algorithm>
 
 TypingEngine::TypingEngine(const std::string& text)
-    : target_text(text) {}
+    : paragraph(text), total_words(0) {
+    // Normalize and split into words
+    std::istringstream iss(paragraph);
+    std::string word;
+    while (iss >> word) {
+        words.push_back(word);
+    }
+    total_words = words.size();
+}
 
 void TypingEngine::add_player(int player_id) {
-    sessions[player_id] = std::make_unique<TypingSession>(target_text);
+    players[player_id] = PlayerMetrics();
 }
 
 void TypingEngine::remove_player(int player_id) {
-    sessions.erase(player_id);
+    players.erase(player_id);
 }
 
-void TypingEngine::on_key(int player_id, char c, double timestamp) {
-    auto it = sessions.find(player_id);
-    if (it != sessions.end()) {
-        it->second->on_key(c, timestamp);
+void TypingEngine::process_input(int player_id, int word_idx, const Json::Value& char_events, int64_t latest_time_ms) {
+    auto it = players.find(player_id);
+    if (it == players.end()) return;
+    
+    if (word_idx < 0 || word_idx >= total_words) return;
+    
+    PlayerMetrics& pm = it->second;
+    
+    // Update word_idx and time
+    pm.word_idx = std::max(pm.word_idx, word_idx + 1); // +1 because word_idx is committed
+    pm.latest_time_ms = latest_time_ms;
+    
+    // Compute accuracy from char_events
+    const std::string& goal = words[word_idx];
+    int correct = 0;
+    int total = 0;
+    
+    std::string curr;
+    for (const auto& evt : char_events) {
+        if (!evt.isMember("key_type") || !evt.isMember("key_pressed")) continue;
+        
+        std::string key_type = evt["key_type"].asString();
+        std::string key_pressed = evt["key_pressed"].asString();
+        
+        if (key_type == "CHAR") {
+            total++;
+            curr += key_pressed;
+            
+            // Check if this character is correct at current position
+            size_t pos = curr.size() - 1;
+            if (pos < goal.size() && goal[pos] == key_pressed[0]) {
+                correct++;
+            }
+        } else if (key_type == "BACKSPACE") {
+            if (!curr.empty()) curr.pop_back();
+        }
+        // SPACE is not counted
     }
+    
+    // Update cumulative accuracy (simple average for now)
+    if (total > 0) {
+        double word_accuracy = (double)correct * 100.0 / total;
+        // Running average: update accuracy based on word count
+        pm.accuracy = (pm.accuracy * word_idx + word_accuracy) / (word_idx + 1);
+    }
+    
+    // Compute WPM
+    if (latest_time_ms > 0) {
+        double elapsed_seconds = latest_time_ms / 1000.0;
+        pm.wpm = (correct / 5.0) / (elapsed_seconds / 60.0);
+    }
+    
+    // Progress
+    pm.progress = (double)pm.word_idx / total_words;
 }
 
 bool TypingEngine::all_finished() const {
-    for (const auto& kv : sessions) {
-        if (!kv.second->finished()) {
+    for (const auto& kv : players) {
+        if (kv.second.word_idx < total_words) {
             return false;
         }
     }
-    return true;
+    return !players.empty();
 }
 
-const TypingSession* TypingEngine::get_session(int player_id) const {
-    auto it = sessions.find(player_id);
-    if (it == sessions.end()) return nullptr;
-    return it->second.get();
+const TypingEngine::PlayerMetrics* TypingEngine::get_session(int player_id) const {
+    auto it = players.find(player_id);
+    if (it == players.end()) return nullptr;
+    return &it->second;
 }

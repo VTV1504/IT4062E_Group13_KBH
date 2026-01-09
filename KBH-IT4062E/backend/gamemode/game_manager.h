@@ -3,9 +3,7 @@
 
 #include <string>
 #include "game_mode.h"
-#include "self_training_mode.h"
 #include "arena_mode.h"
-#include "survival_mode.h"
 #include "database.h"
 
 class GameManager {

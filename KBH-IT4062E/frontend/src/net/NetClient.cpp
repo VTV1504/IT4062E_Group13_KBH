@@ -267,7 +267,10 @@ void NetClient::send_json_internal(const Json::Value& obj) {
 }
 
 void NetClient::send_time_sync(int64_t client_time_ms) {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send time_sync.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -277,7 +280,10 @@ void NetClient::send_time_sync(int64_t client_time_ms) {
 }
 
 void NetClient::send_set_username(const std::string& username) {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send set_username.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -287,7 +293,10 @@ void NetClient::send_set_username(const std::string& username) {
 }
 
 void NetClient::send_create_room() {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send create_room.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -296,7 +305,10 @@ void NetClient::send_create_room() {
 }
 
 void NetClient::send_join_room(const std::string& room_id) {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send join_room.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -306,7 +318,10 @@ void NetClient::send_join_room(const std::string& room_id) {
 }
 
 void NetClient::send_join_random() {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send join_random.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -315,7 +330,10 @@ void NetClient::send_join_random() {
 }
 
 void NetClient::send_exit_room() {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send exit_room.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -324,7 +342,10 @@ void NetClient::send_exit_room() {
 }
 
 void NetClient::send_ready() {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send ready.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -333,7 +354,10 @@ void NetClient::send_ready() {
 }
 
 void NetClient::send_unready() {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send unready.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -342,7 +366,10 @@ void NetClient::send_unready() {
 }
 
 void NetClient::send_set_private(bool is_private) {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send set_private.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -352,7 +379,10 @@ void NetClient::send_set_private(bool is_private) {
 }
 
 void NetClient::send_start_game(int duration_ms) {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send start_game.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -362,7 +392,10 @@ void NetClient::send_start_game(int duration_ms) {
 }
 
 void NetClient::send_input(const std::string& room_id, int word_idx, const Json::Value& char_events) {
-    if (!connected_) return;
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send input.\n";
+        return;
+    }
     std::lock_guard<std::mutex> lock(send_mutex_);
     
     Json::Value msg;
@@ -370,5 +403,17 @@ void NetClient::send_input(const std::string& room_id, int word_idx, const Json:
     msg["room_id"] = room_id;
     msg["word_idx"] = word_idx;
     msg["char_events"] = char_events;
+    send_json_internal(msg);
+}
+
+void NetClient::send_leaderboard() {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send leaderboard.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "leaderboard";
     send_json_internal(msg);
 }
