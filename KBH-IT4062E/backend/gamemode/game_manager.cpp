@@ -24,21 +24,22 @@ void GameManager::start_game(const std::string& mode) {
     }
 
     if (mode == "Arena") {
-        // lấy text từ DB, nếu chưa có DB thì dùng fallback
         std::string text;
         if (database) {
-            text = database->get_random_paragraph("en");
+            text = database->get_paragraph_by_word_count(40);
         } else {
             text = "fallback text when database is not set.";
         }
 
-        current_mode = new ArenaMode(text);
+        auto* arena = new ArenaMode();
+        arena->configure(ArenaDifficulty::Easy, text, 90);
+        current_mode = arena;
     }
     else if (mode == "SelfTraining") {
         current_mode = new SelfTrainingMode();
     }
     else if (mode == "Survival") {
-        current_mode = new SurvivalMode();
+        current_mode = new SurvivalMode(database);
     }
     else {
         std::cerr << "Invalid mode: " << mode << "\n";

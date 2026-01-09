@@ -28,6 +28,14 @@ void TypingSession::on_key(char c, double timestamp) {
     }
 }
 
+void TypingSession::finalize(double timestamp) {
+    if (start_time < 0) {
+        start_time = timestamp;
+    }
+    end_time = timestamp;
+    stats.elapsed_seconds = end_time - start_time;
+}
+
 bool TypingSession::finished() const {
     return cursor >= target.size();
 }

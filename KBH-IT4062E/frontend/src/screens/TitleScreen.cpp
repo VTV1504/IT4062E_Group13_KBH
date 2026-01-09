@@ -1,9 +1,11 @@
 #include "TitleScreen.h"
 #include "../app/App.h"
 #include "../ui/UiTheme.h"
+#include "../ui/TextDraw.h"
 #include <SDL_ttf.h>
 #include <cmath>
 #include <algorithm>
+#include <jsoncpp/json/json.h>
 
 static bool pointInRect(int x, int y, const SDL_Rect& r) {
     return (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
@@ -226,13 +228,14 @@ void TitleScreen::onEnter() {
         menuText.push_back(makeText(s, 64));
         menuRect.push_back(SDL_Rect{0,0,0,0});
     }
-    signText = makeText("Sign in / Sign up", 58);
+    signLabel = app->session().isLoggedIn() ? "Profile" : "Sign in / Sign up";
+    signText = makeText(signLabel, 58);
 
     // ====== TỌA ĐỘ THEO BẠN ======
     // Create Room: x=77, y=403
     // 4 nút cách nhau 15px theo chiều dọc
     const int menuX = 77;
-    const int firstY = 403;
+    const int firstY = 340;
     const int gapY = btnH + 15;
 
     for (int i = 0; i < (int)labels.size(); ++i) {
@@ -245,6 +248,15 @@ void TitleScreen::onEnter() {
 
     hoveredMenu = -1;
     hoveredSign = false;
+}
+
+void TitleScreen::update(float) {
+    std::string desired = app->session().isLoggedIn() ? "Profile" : "Sign in / Sign up";
+    if (desired != signLabel) {
+        destroyText(signText);
+        signLabel = desired;
+        signText = makeText(signLabel, 58);
+    }
 }
 
 void TitleScreen::onExit() {
@@ -266,10 +278,23 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
         updateHoverFromMouse(e.button.x, e.button.y);
 
         if (hoveredMenu != -1) {
-            if (hoveredMenu == 0) app->router().change(RouteId::Lobby);
-            else if (hoveredMenu == 1) app->router().push(RouteId::EnterRoomOverlay);
-            else if (hoveredMenu == 2) { app->state().setPendingMode(GameMode::Training); app->router().change(RouteId::Game); }
-            else if (hoveredMenu == 3) app->router().push(RouteId::LeaderboardOverlay);
+            if (hoveredMenu == 0) {
+                Json::Value payload;
+                payload["mode"] = "arena";
+                payload["visibility"] = "public";
+                app->network().sendCommand("CREATE_ROOM", payload);
+            } else if (hoveredMenu == 1) {
+                Json::Value payload;
+                payload["mode"] = "survival";
+                payload["visibility"] = "public";
+                app->network().sendCommand("CREATE_ROOM", payload);
+            } else if (hoveredMenu == 2) {
+                app->network().sendCommand("SELF_TRAINING_START", Json::Value(Json::objectValue));
+            } else if (hoveredMenu == 3) {
+                app->router().push(RouteId::EnterRoomOverlay);
+            } else if (hoveredMenu == 4) {
+                app->router().push(RouteId::LeaderboardOverlay);
+            }
             return;
         }
 
@@ -323,4 +348,9 @@ void TitleScreen::render(SDL_Renderer* r) {
         SDL_Color c = hoveredSign ? UiTheme::Warm : UiTheme::Yellow;
         drawTextShadow(r, signText, sx, sy, c);
     }
+
+    TTF_Font* f = app->resources().font(UiTheme::SubFontPath, 24);
+    SDL_Color statusColor = app->state().isConnected() ? UiTheme::Warm : SDL_Color{255, 120, 120, 255};
+    std::string status = app->state().isConnected() ? "Server: Connected" : "Server: Offline";
+    drawText(r, f, status, 77, 960, statusColor);
 }
