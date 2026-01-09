@@ -10,7 +10,7 @@ public:
     void onExit() override;
 
     void handleEvent(const SDL_Event& e) override;
-    void update(float) override {}
+    void update(float) override;
     void render(SDL_Renderer* r) override;
 
 private:
@@ -49,9 +49,10 @@ private:
 
     // menu items
     std::vector<std::string> labels {
-        "Create Room",
+        "Arena Room",
+        "Survival Room",
+        "Self Training",
         "Join Room",
-        "Training",
         "Leaderboard"
     };
 
@@ -59,6 +60,7 @@ private:
     std::vector<SDL_Rect> menuRect; // clickable/hover area = button rect
 
     TextTex signText;
+    std::string signLabel;
     SDL_Rect signRect{0,0,0,0};
 
     int hoveredMenu = -1;

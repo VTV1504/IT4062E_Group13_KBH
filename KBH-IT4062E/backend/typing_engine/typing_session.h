@@ -8,6 +8,7 @@ public:
 
     // input từng ký tự
     void on_key(char c, double timestamp);
+    void finalize(double timestamp);
 
     bool finished() const;
     size_t progress() const;

@@ -1,120 +1,173 @@
 #include "arena_mode.h"
-#include <sstream>
 #include <algorithm>
+#include <sstream>
 
-/* ===== constructor ===== */
+ArenaMode::ArenaMode() : engine_("") {}
 
-ArenaMode::ArenaMode(const std::string& text)
-    : target_text(text),
-      engine(text),
-      started(false) {}
-
-/* ===== GameMode overrides ===== */
+void ArenaMode::configure(ArenaDifficulty difficulty,
+                          const std::string& text,
+                          int duration_seconds) {
+    difficulty_ = difficulty;
+    target_text_ = text;
+    duration_seconds_ = duration_seconds;
+    engine_ = TypingEngine(target_text_);
+}
 
 void ArenaMode::start() {
-    started = true;
+    started_ = true;
+    start_time_ = std::chrono::steady_clock::now();
 }
 
 void ArenaMode::process_input(const std::string& /*input*/) {
-    // NOT USED
-    // ArenaMode nhận input theo player (fd), không theo GameMode interface
 }
 
 void ArenaMode::end() {
-    // placeholder – logic cleanup nếu cần
+    started_ = false;
 }
 
 void ArenaMode::display_results() {
-    // server sẽ dùng get_ranking()
 }
 
-/* ===== Arena specific logic ===== */
-
 void ArenaMode::add_player(int fd, const std::string& name) {
-    players[fd] = ArenaPlayer{fd, name, false};
-    engine.add_player(fd);
+    players_[fd] = ArenaPlayer{fd, name};
+    engine_.add_player(fd);
 }
 
 void ArenaMode::remove_player(int fd) {
-    players.erase(fd);
-    engine.remove_player(fd);
+    players_.erase(fd);
+    engine_.remove_player(fd);
 }
 
 void ArenaMode::set_ready(int fd) {
-    auto it = players.find(fd);
-    if (it != players.end()) {
+    auto it = players_.find(fd);
+    if (it != players_.end()) {
         it->second.ready = true;
     }
 }
 
 void ArenaMode::set_unready(int fd) {
-    auto it = players.find(fd);
-    if (it != players.end()) {
+    auto it = players_.find(fd);
+    if (it != players_.end()) {
         it->second.ready = false;
     }
 }
 
 bool ArenaMode::all_ready() const {
-    if (players.empty()) return false;
-    for (const auto& kv : players) {
-        if (!kv.second.ready) return false;
+    if (players_.empty()) return false;
+    for (const auto& pair : players_) {
+        if (!pair.second.ready) return false;
     }
     return true;
 }
 
-void ArenaMode::process_player_input(int fd, const std::string& input) {
-    if (!started) return;
+void ArenaMode::process_player_key(int fd, char c, double timestamp) {
+    if (!started_) return;
+    auto it = players_.find(fd);
+    if (it == players_.end()) return;
 
-    // TEMP: feed full string as keystrokes
-    double t = 0.0;
-    for (char c : input) {
-        engine.on_key(fd, c, t);
-        t += 0.05;
+    engine_.on_key(fd, c, timestamp);
+    const TypingSession* session = engine_.get_session(fd);
+    if (!session) return;
+
+    it->second.progress = session->progress();
+    it->second.last_timestamp = timestamp;
+
+    if (session->finished() && !it->second.finished) {
+        it->second.finished = true;
+        it->second.finish_time = timestamp;
+    }
+}
+
+void ArenaMode::finalize_all(double timestamp) {
+    for (auto& pair : players_) {
+        TypingSession* session = engine_.get_session_mutable(pair.first);
+        if (session && !session->finished()) {
+            session->finalize(timestamp);
+        }
     }
 }
 
 bool ArenaMode::finished() const {
-    return engine.all_finished();
+    if (!started_) return false;
+    if (players_.empty()) return false;
+    for (const auto& pair : players_) {
+        if (!pair.second.finished) {
+            return false;
+        }
+    }
+    return true;
 }
 
-std::string ArenaMode::get_ranking() const {
-    struct Result {
-        std::string name;
-        double wpm;
-        double acc;
-    };
+bool ArenaMode::time_over() const {
+    if (!started_) return false;
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
+    return elapsed >= duration_seconds_;
+}
 
-    std::vector<Result> results;
+std::vector<ArenaRankingEntry> ArenaMode::get_rankings() const {
+    std::vector<ArenaRankingEntry> entries;
+    entries.reserve(players_.size());
 
-    for (const auto& kv : players) {
-        const TypingSession* session = engine.get_session(kv.first);
-        if (!session) continue;
-
-        const TypingMetrics& m = session->metrics();
-        results.push_back({
-            kv.second.name,
-            m.wpm(),
-            m.accuracy()
-        });
+    for (const auto& pair : players_) {
+        const ArenaPlayer& player = pair.second;
+        const TypingSession* session = engine_.get_session(player.fd);
+        TypingMetrics metrics;
+        if (session) {
+            metrics = session->metrics();
+        }
+        ArenaRankingEntry entry;
+        entry.name = player.name;
+        entry.finished = player.finished;
+        entry.progress = player.progress;
+        entry.finish_time = player.finish_time;
+        entry.last_timestamp = player.last_timestamp;
+        entry.wpm = metrics.wpm();
+        entry.accuracy = metrics.accuracy();
+        entries.push_back(entry);
     }
 
-    std::sort(results.begin(), results.end(),
-              [](const Result& a, const Result& b) {
-                  return a.wpm > b.wpm;
-              });
+    std::sort(entries.begin(), entries.end(), [](const ArenaRankingEntry& a, const ArenaRankingEntry& b) {
+        if (a.finished != b.finished) {
+            return a.finished > b.finished;
+        }
+        if (a.finished && b.finished) {
+            if (a.finish_time != b.finish_time) {
+                return a.finish_time < b.finish_time;
+            }
+            if (a.wpm != b.wpm) {
+                return a.wpm > b.wpm;
+            }
+            return a.accuracy > b.accuracy;
+        }
+        if (a.progress != b.progress) {
+            return a.progress > b.progress;
+        }
+        if (a.last_timestamp != b.last_timestamp) {
+            return a.last_timestamp < b.last_timestamp;
+        }
+        if (a.wpm != b.wpm) {
+            return a.wpm > b.wpm;
+        }
+        return a.accuracy > b.accuracy;
+    });
 
+    return entries;
+}
+
+std::string ArenaMode::get_ranking_payload() const {
+    auto rankings = get_rankings();
     std::ostringstream oss;
-    int rank = 1;
-    for (const auto& r : results) {
-        oss << rank++ << ". "
-            << r.name
-            << " | WPM: " << (int)r.wpm
-            << " | Acc: " << (int)r.acc << "%\n";
+    for (const auto& entry : rankings) {
+        oss << entry.name << "|" << (entry.finished ? "finished" : "unfinished")
+            << "|" << entry.progress
+            << "|" << entry.finish_time
+            << "|" << entry.wpm
+            << "|" << entry.accuracy << "\n";
     }
-
     return oss.str();
 }
 
 const std::string& ArenaMode::get_text() const {
-    return target_text;
+    return target_text_;
 }

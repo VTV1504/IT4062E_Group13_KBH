@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <pqxx/pqxx>
+#include <jsoncpp/json/json.h>
 
 class Database {
 public:
@@ -13,13 +14,32 @@ public:
     // Destructor
     ~Database();
 
-    // Save score (future feature)
-    bool save_player_score(const std::string& player_name, int score);
+    void init_schema();
 
-    // Get leaderboard (future feature)
-    std::vector<std::string> get_leaderboard();
+    bool create_user(const std::string& username,
+                     const std::string& password_hash,
+                     const std::string& salt);
+    bool verify_user(const std::string& username,
+                     const std::string& password_hash) const;
+    bool update_password(const std::string& username,
+                         const std::string& new_password_hash,
+                         const std::string& new_salt);
+    bool user_exists(const std::string& username) const;
 
-    // 🔥 NEW: get random paragraph for Arena Mode
+    std::string get_user_salt(const std::string& username) const;
+
+    bool save_self_training_result(const std::string& username,
+                                   double wpm,
+                                   double accuracy);
+    Json::Value get_self_training_leaderboard(const std::string& username) const;
+
+    bool save_survival_result(const std::string& username,
+                              int points,
+                              int rooms_survived);
+    Json::Value get_survival_leaderboard(const std::string& username) const;
+
+    std::string get_paragraph_by_word_count(int word_count,
+                                            const std::string& language = "en");
     std::string get_random_paragraph(const std::string& language = "en");
 
 private:

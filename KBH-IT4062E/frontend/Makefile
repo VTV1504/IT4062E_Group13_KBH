@@ -20,7 +20,7 @@ TTF_CFLAGS := $(shell pkg-config --cflags SDL2_ttf)
 TTF_LIBS   := $(shell pkg-config --libs SDL2_ttf)
 
 CXXFLAGS += $(SDL_CFLAGS) $(IMG_CFLAGS) $(TTF_CFLAGS) -I$(SRC_DIR)
-LDFLAGS  += $(SDL_LIBS) $(IMG_LIBS) $(TTF_LIBS)
+LDFLAGS  += $(SDL_LIBS) $(IMG_LIBS) $(TTF_LIBS) -ljsoncpp
 
 all: $(TARGET)
 

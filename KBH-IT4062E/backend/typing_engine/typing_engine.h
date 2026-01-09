@@ -16,6 +16,7 @@ public:
     bool all_finished() const;
 
     const TypingSession* get_session(int player_id) const;
+    TypingSession* get_session_mutable(int player_id);
 
 private:
     std::string target_text;

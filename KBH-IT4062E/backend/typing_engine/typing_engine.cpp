@@ -32,3 +32,9 @@ const TypingSession* TypingEngine::get_session(int player_id) const {
     if (it == sessions.end()) return nullptr;
     return it->second.get();
 }
+
+TypingSession* TypingEngine::get_session_mutable(int player_id) {
+    auto it = sessions.find(player_id);
+    if (it == sessions.end()) return nullptr;
+    return it->second.get();
+}
