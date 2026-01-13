@@ -217,16 +217,21 @@ void TitleScreen::drawHoverButton(SDL_Renderer* r, const SDL_Rect& outer) {
 }
 
 void TitleScreen::onEnter() {
+    std::cout << "[TitleScreen] onEnter() called\n";
+    std::cout << "[TitleScreen] Loading textures...\n";
     bg   = app->resources().texture(UiTheme::TitleBgPath);
     logo = app->resources().texture(UiTheme::TitleLogoPath);
+    std::cout << "[TitleScreen] Textures loaded\n";
 
     menuText.clear();
     menuRect.clear();
 
+    std::cout << "[TitleScreen] Creating menu text...\n";
     for (auto& s : labels) {
         menuText.push_back(makeText(s, 64));
         menuRect.push_back(SDL_Rect{0,0,0,0});
     }
+    std::cout << "[TitleScreen] Menu text created\n";
     
     // Update sign text based on login state
     if (app->session().isLoggedIn()) {
@@ -282,14 +287,15 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
             else if (hoveredMenu == 1) {
                 app->router().push(RouteId::JoinRoomOverlay);
             }
-            // Training: gửi game_init, set pending mode, chuyển thẳng vào game
+            // Training: tạo room private và start game ngay
             else if (hoveredMenu == 2) {
-                // Gửi message game_init cho self_training mode
-                // Self training mode: max_player=1, slot=1, đi thẳng vào game không qua lobby
+                // Training mode: create private room and auto-start
                 app->state().setPendingMode(GameMode::Training);
-                // TODO: Có thể cần gửi message game_init với parameters cho self_training
-                // app->network().send_game_init(...); // Implement khi server hỗ trợ
-                app->router().change(RouteId::Game);
+                app->network().send_create_room();
+                // Server will send room_state, then we'll be in lobby
+                // We'll need to auto-start from lobby after room creation
+                // For now, navigate to lobby and let user start manually
+                app->router().change(RouteId::Lobby);
             }
             // Leaderboard: gửi leaderboard request
             else if (hoveredMenu == 3) {

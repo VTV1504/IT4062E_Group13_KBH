@@ -20,6 +20,10 @@ struct PlayerMetrics {
     double progress = 0.0;
     double wpm = 0.0;
     double accuracy = 0.0;
+    
+    // Cumulative stats for accurate WPM/accuracy calculation
+    int total_correct_chars = 0;
+    int total_chars_typed = 0;
 };
 
 struct RankingEntry {
@@ -96,8 +100,7 @@ private:
     
     // Paragraph
     std::string paragraph_;
-    int total_words_ = 0;
-    
+    int total_words_ = 0;    std::vector<std::string> paragraph_words_;    
     // Player metrics
     std::unordered_map<int, PlayerMetrics> player_metrics_;
     

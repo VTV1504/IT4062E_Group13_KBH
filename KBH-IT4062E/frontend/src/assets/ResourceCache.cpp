@@ -1,17 +1,39 @@
 #include "ResourceCache.h"
 #include <SDL_image.h>
+#include <iostream>
 
 SDL_Texture* ResourceCache::texture(const std::string& path) {
+    std::cout << "[ResourceCache] Requesting texture: " << path << "\n";
+    
+    if (!ren) {
+        std::cerr << "[ResourceCache] Error: renderer is nullptr!\n";
+        return nullptr;
+    }
+    
     auto it = textures.find(path);
-    if (it != textures.end()) return it->second;
+    if (it != textures.end()) {
+        std::cout << "[ResourceCache] Texture found in cache\n";
+        return it->second;
+    }
 
+    std::cout << "[ResourceCache] Loading image from disk...\n";
     SDL_Surface* s = IMG_Load(path.c_str());
-    if (!s) return nullptr;
+    if (!s) {
+        std::cerr << "[ResourceCache] IMG_Load failed: " << IMG_GetError() << "\n";
+        return nullptr;
+    }
 
+    std::cout << "[ResourceCache] Creating texture from surface...\n";
     SDL_Texture* t = SDL_CreateTextureFromSurface(ren, s);
     SDL_FreeSurface(s);
 
-    if (t) textures[path] = t;
+    if (!t) {
+        std::cerr << "[ResourceCache] SDL_CreateTextureFromSurface failed: " << SDL_GetError() << "\n";
+        return nullptr;
+    }
+    
+    std::cout << "[ResourceCache] Texture created successfully\n";
+    textures[path] = t;
     return t;
 }
 

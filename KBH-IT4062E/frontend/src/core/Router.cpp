@@ -15,6 +15,7 @@
 #include "../overlays/ChangePasswordOverlay.h"
 #include "../overlays/GuestResultOverlay.h"
 #include "../overlays/UserResultOverlay.h"
+#include "../overlays/MatchResultOverlay.h"
 
 void Router::change(RouteId id) {
     std::cout << "[Router] Changing to route " << (int)id << "\n";
@@ -49,6 +50,7 @@ std::unique_ptr<View> Router::make(RouteId id) {
         case RouteId::ChangePasswordOverlay:return std::make_unique<ChangePasswordOverlay>();
         case RouteId::GuestResultOverlay:  return std::make_unique<GuestResultOverlay>();
         case RouteId::UserResultOverlay:   return std::make_unique<UserResultOverlay>();
+        case RouteId::MatchResultOverlay:  return std::make_unique<MatchResultOverlay>();
         default:                           return nullptr;
     }
 }

@@ -13,6 +13,10 @@ public:
     NetClient();
     ~NetClient();
     
+    // Delete copy constructor and assignment (not copyable due to thread member)
+    NetClient(const NetClient&) = delete;
+    NetClient& operator=(const NetClient&) = delete;
+    
     // Connect to server
     bool connect(const std::string& ip, int port);
     

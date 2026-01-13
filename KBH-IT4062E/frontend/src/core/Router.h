@@ -15,7 +15,8 @@ enum class RouteId {
     CreateAccountOverlay,
     ChangePasswordOverlay,
     GuestResultOverlay,
-    UserResultOverlay
+    UserResultOverlay,
+    MatchResultOverlay
 };
 
 class App;

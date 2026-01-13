@@ -307,7 +307,7 @@ void Server::on_join_room(int fd, const Json::Value& msg) {
         Json::Value err;
         err["type"] = "error";
         err["code"] = err_msg.empty() ? "JOIN_FAILED" : err_msg;
-        err["message"] = "Failed to join room";
+        err["message"] = "Room not exsists or is full";
         send_json(fd, err);
         return;
     }
@@ -533,6 +533,9 @@ void Server::on_input(int fd, const Json::Value& msg) {
         
         broadcast_json(room, end);
         room->end_game();
+        
+        // Send updated room_state after game ends (all players unready)
+        broadcast_room_state(room);
     }
 }
 

@@ -15,6 +15,13 @@ NetClient::~NetClient() {
 bool NetClient::connect(const std::string& ip, int port) {
     if (connected_) return false;
     
+    // Make sure no thread is running from a previous connection attempt
+    if (recv_thread_.joinable()) {
+        std::cerr << "[NetClient] Warning: receiver thread still running, joining first\n";
+        should_stop_ = true;
+        recv_thread_.join();
+    }
+    
     sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd_ < 0) {
         std::cerr << "[NetClient] Failed to create socket: " << strerror(errno) << "\n";
@@ -49,7 +56,16 @@ bool NetClient::connect(const std::string& ip, int port) {
     std::cout << "[NetClient] Connected to " << ip << ":" << port << "\n";
     
     // Start receive thread
-    recv_thread_ = std::thread(&NetClient::receive_thread, this);
+    try {
+        recv_thread_ = std::thread(&NetClient::receive_thread, this);
+        std::cout << "[NetClient] Receiver thread created successfully\n";
+    } catch (const std::exception& e) {
+        std::cerr << "[NetClient] Failed to create receiver thread: " << e.what() << "\n";
+        connected_ = false;
+        close(sockfd_);
+        sockfd_ = -1;
+        return false;
+    }
     
     return true;
 }
@@ -75,73 +91,95 @@ void NetClient::disconnect() {
 void NetClient::receive_thread() {
     char buffer[4096];
     
-    while (!should_stop_ && connected_) {
-        int n = recv(sockfd_, buffer, sizeof(buffer) - 1, 0);
-        
-        if (n <= 0) {
-            std::cerr << "[NetClient] Connection closed by server\n";
-            connected_ = false;
-            break;
+    // std::cout << "[NetClient] Receiver thread started\n";
+    
+    try {
+        while (!should_stop_ && connected_) {
+            int n = recv(sockfd_, buffer, sizeof(buffer) - 1, 0);
+            
+            if (n <= 0) {
+                std::cerr << "[NetClient] Connection closed by server (recv=" << n << ")\n";
+                connected_ = false;
+                break;
+            }
+            
+            buffer[n] = '\0';
+            recv_buffer_.append(buffer, n);
+            
+            // Process complete JSON lines
+            size_t pos;
+            while ((pos = recv_buffer_.find('\n')) != std::string::npos) {
+                std::string line = recv_buffer_.substr(0, pos);
+                recv_buffer_.erase(0, pos + 1);
+                
+                // Trim whitespace
+                while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+                    line.pop_back();
+                }
+                
+                if (line.empty()) continue;
+                
+                // std::cout << "[NetClient] Received: " << line << "\n";
+                
+                // Parse JSON
+                Json::Value msg;
+                Json::CharReaderBuilder builder;
+                std::istringstream ss(line);
+                std::string errs;
+                
+                if (!Json::parseFromStream(builder, ss, &msg, &errs)) {
+                    std::cerr << "[NetClient] JSON parse error: " << errs << "\n";
+                    continue;
+                }
+                
+                // Parse event and push to queue
+                auto event = parse_event(msg);
+                if (event) {
+                    // std::cout << "[NetClient] Parsed event type: " << (int)event->type << "\n";
+                    std::lock_guard<std::mutex> lock(queue_mutex_);
+                    event_queue_.push(std::move(event));
+                } else {
+                    std::cerr << "[NetClient] Failed to parse event from JSON\n";
+                }
+            }
         }
-        
-        buffer[n] = '\0';
-        recv_buffer_.append(buffer, n);
-        
-        // Process complete JSON lines
-        size_t pos;
-        while ((pos = recv_buffer_.find('\n')) != std::string::npos) {
-            std::string line = recv_buffer_.substr(0, pos);
-            recv_buffer_.erase(0, pos + 1);
-            
-            // Trim whitespace
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
-                line.pop_back();
-            }
-            
-            if (line.empty()) continue;
-            
-            // Parse JSON
-            Json::Value msg;
-            Json::CharReaderBuilder builder;
-            std::istringstream ss(line);
-            std::string errs;
-            
-            if (!Json::parseFromStream(builder, ss, &msg, &errs)) {
-                std::cerr << "[NetClient] JSON parse error: " << errs << "\n";
-                continue;
-            }
-            
-            // Parse event and push to queue
-            auto event = parse_event(msg);
-            if (event) {
-                std::lock_guard<std::mutex> lock(queue_mutex_);
-                event_queue_.push(std::move(event));
-            }
-        }
+    } catch (const std::exception& e) {
+        std::cerr << "[NetClient] Exception in receiver thread: " << e.what() << "\n";
+        connected_ = false;
+    } catch (...) {
+        std::cerr << "[NetClient] Unknown exception in receiver thread\n";
+        connected_ = false;
     }
+    
+    std::cout << "[NetClient] Receiver thread stopped\n";
 }
 
 std::unique_ptr<NetEvent> NetClient::parse_event(const Json::Value& json) {
-    if (!json.isMember("type") || !json["type"].isString()) {
-        return nullptr;
-    }
-    
-    std::string type = json["type"].asString();
-    
-    if (type == "hello") {
-        auto evt = std::make_unique<HelloEvent>();
-        if (json.isMember("client_id")) evt->client_id = json["client_id"].asInt();
-        if (json.isMember("server_time_ms")) evt->server_time_ms = json["server_time_ms"].asInt64();
-        return evt;
-    }
-    
-    if (type == "time_sync") {
-        auto evt = std::make_unique<TimeSyncEvent>();
-        if (json.isMember("client_id")) evt->client_id = json["client_id"].asInt();
-        if (json.isMember("server_time_ms")) evt->server_time_ms = json["server_time_ms"].asInt64();
-        if (json.isMember("client_time_ms")) evt->client_time_ms = json["client_time_ms"].asInt64();
-        return evt;
-    }
+    try {
+        if (!json.isMember("type") || !json["type"].isString()) {
+            std::cerr << "[NetClient] Event missing 'type' field or type is not a string\n";
+            std::cerr << "[NetClient] JSON: " << json.toStyledString() << "\n";
+            return nullptr;
+        }
+        
+        std::string type = json["type"].asString();
+        // std::cout << "[NetClient] Parsing event type: " << type << "\n";
+        
+        if (type == "hello") {
+            auto evt = std::make_unique<HelloEvent>();
+            if (json.isMember("client_id")) evt->client_id = json["client_id"].asInt();
+            if (json.isMember("server_time_ms")) evt->server_time_ms = json["server_time_ms"].asInt64();
+            // std::cout << "[NetClient] Parsed hello: client_id=" << evt->client_id << "\n";
+            return evt;
+        }
+        
+        if (type == "time_sync") {
+            auto evt = std::make_unique<TimeSyncEvent>();
+            if (json.isMember("client_id")) evt->client_id = json["client_id"].asInt();
+            if (json.isMember("server_time_ms")) evt->server_time_ms = json["server_time_ms"].asInt64();
+            if (json.isMember("client_time_ms")) evt->client_time_ms = json["client_time_ms"].asInt64();
+            return evt;
+        }
     
     if (type == "room_state") {
         auto evt = std::make_unique<RoomStateEvent>();
@@ -252,7 +290,16 @@ std::unique_ptr<NetEvent> NetClient::parse_event(const Json::Value& json) {
         return evt;
     }
     
+    std::cerr << "[NetClient] Unknown event type: " << type << "\n";
     return nullptr;
+    
+    } catch (const std::exception& e) {
+        std::cerr << "[NetClient] Exception in parse_event: " << e.what() << "\n";
+        return nullptr;
+    } catch (...) {
+        std::cerr << "[NetClient] Unknown exception in parse_event\n";
+        return nullptr;
+    }
 }
 
 std::unique_ptr<NetEvent> NetClient::poll_event() {

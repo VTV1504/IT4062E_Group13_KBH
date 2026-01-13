@@ -18,6 +18,7 @@ Room::Room(const std::string& id, Database* db)
     std::istringstream iss(paragraph_);
     std::string word;
     while (iss >> word) {
+        paragraph_words_.push_back(word);
         total_words_++;
     }
 }
@@ -148,38 +149,67 @@ void Room::process_input(int fd, int word_idx, const Json::Value& char_events) {
         metrics.word_idx = word_idx + 1; // Next word index
     }
     
+    // Get the target word for accuracy calculation
+    std::string target_word = "";
+    if (word_idx >= 0 && word_idx < (int)paragraph_words_.size()) {
+        target_word = paragraph_words_[word_idx];
+    }
+    
     // Calculate metrics from char_events
     int correct_chars = 0;
     int total_chars = 0;
+    std::string typed_word = "";
     
     for (const auto& event : char_events) {
-        std::string key_type = event["key_type"].asString();
+        std::string event_type = event["type"].asString();
         
-        if (key_type == "CHAR") {
-            total_chars++;
-            // Simplified: assume correct for now
-            correct_chars++;
+        if (event_type == "char") {
+            std::string ch = event["char"].asString();
+            if (!ch.empty()) {
+                typed_word += ch[0];
+                total_chars++;
+            }
+        } else if (event_type == "backspace") {
+            if (!typed_word.empty()) {
+                typed_word.pop_back();
+            }
         }
         
-        if (event.isMember("t_ms")) {
-            metrics.latest_time_ms = event["t_ms"].asInt64();
+        if (event.isMember("time_ms")) {
+            metrics.latest_time_ms = event["time_ms"].asInt64();
         }
     }
+    
+    // Calculate correct chars by comparing typed_word with target_word
+    size_t min_len = std::min(typed_word.length(), target_word.length());
+    for (size_t i = 0; i < min_len; i++) {
+        if (typed_word[i] == target_word[i]) {
+            correct_chars++;
+        }
+    }
+    // If lengths don't match, remaining chars are wrong
+    // correct_chars already counted for matching portion
+    
+    // Update cumulative stats
+    metrics.total_correct_chars += correct_chars;
+    metrics.total_chars_typed += total_chars;
     
     // Calculate progress
     metrics.progress = (double)metrics.word_idx / total_words_;
     
-    // Calculate WPM
-    if (metrics.latest_time_ms > 0) {
-        double elapsed_minutes = metrics.latest_time_ms / 60000.0;
+    // Calculate WPM (based on total correct chars typed so far)
+    if (metrics.latest_time_ms > game_start_time_) {
+        double elapsed_ms = metrics.latest_time_ms - game_start_time_;
+        double elapsed_minutes = elapsed_ms / 60000.0;
         if (elapsed_minutes > 0) {
-            metrics.wpm = (correct_chars / 5.0) / elapsed_minutes;
+            // WPM = (total correct chars / 5) / elapsed_minutes
+            metrics.wpm = (metrics.total_correct_chars / 5.0) / elapsed_minutes;
         }
     }
     
-    // Calculate accuracy (simplified)
-    if (total_chars > 0) {
-        metrics.accuracy = (correct_chars * 100.0) / total_chars;
+    // Calculate accuracy (cumulative)
+    if (metrics.total_chars_typed > 0) {
+        metrics.accuracy = (metrics.total_correct_chars * 100.0) / metrics.total_chars_typed;
     } else {
         metrics.accuracy = 100.0;
     }

@@ -10,9 +10,11 @@ int main() {
         std::cerr << "[Main] app.init() failed!\n";
         return 1;
     }
+    std::cout << "[Main] app.init() returned successfully\n";
     
     std::cout << "[Main] Starting main loop...\n";
     app.run();
+    std::cout << "[Main] Main loop exited\n";
     
     std::cout << "[Main] Shutting down...\n";
     app.shutdown();

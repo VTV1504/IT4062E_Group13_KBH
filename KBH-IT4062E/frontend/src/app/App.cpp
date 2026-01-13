@@ -70,6 +70,7 @@ bool App::init() {
     }
     
     std::cout << "[App] Initialization complete!\n";
+    std::cout << "[App] Returning from init()\n";
     return true;
 }
 
@@ -90,7 +91,9 @@ void App::processDeferred() {
 }
 
 void App::run() {
+    std::cout << "[App] Starting main loop...\n";
     rt.change(RouteId::Title);
+    std::cout << "[App] Changed route to Title\n";
 
     Uint64 last = SDL_GetPerformanceCounter();
     const double freq = (double)SDL_GetPerformanceFrequency();
@@ -145,7 +148,9 @@ void App::run() {
                 switch (event->type) {
                     case NetEventType::Hello:
                         // Connection established
+                        std::cout << "[App] Received Hello from server\n";
                         break;
+                        
                     case NetEventType::RoomState: {
                         // Update room state
                         auto* rs = static_cast<RoomStateEvent*>(event.get());
@@ -161,9 +166,48 @@ void App::run() {
                         }
                         break;
                     }
-                    case NetEventType::GameInit:
-                        // Game starting
+                    
+                    case NetEventType::GameInit: {
+                        // Game starting - navigate to GameScreen
+                        auto* gi = static_cast<GameInitEvent*>(event.get());
+                        st.setGameInit(*gi);
+                        std::cout << "[App] Game init received, paragraph: " << gi->paragraph.substr(0, 50) << "...\n";
+                        
+                        // Push GameScreen on top of LobbyScreen (keep lobby in stack)
+                        defer([this]() {
+                            rt.push(RouteId::Game);
+                        });
                         break;
+                    }
+                    
+                    case NetEventType::GameState: {
+                        // Game state update
+                        auto* gs = static_cast<GameStateEvent*>(event.get());
+                        st.setGameState(*gs);
+                        
+                        // If game ended, navigate to result screen
+                        if (gs->ended) {
+                            std::cout << "[App] Game ended\n";
+                            // TODO: Navigate to result screen
+                        }
+                        break;
+                    }
+                    
+                    case NetEventType::GameEnd: {
+                        // Game finished with rankings
+                        auto* ge = static_cast<GameEndEvent*>(event.get());
+                        std::cout << "[App] Game ended: " << ge->reason << "\n";
+                        
+                        // Store game end event in state
+                        st.setGameEnd(*ge);
+                        
+                        // Push MatchResultOverlay on top of GameScreen
+                        defer([this]() {
+                            rt.push(RouteId::MatchResultOverlay);
+                        });
+                        break;
+                    }
+                    
                     case NetEventType::Error: {
                         auto* err = static_cast<ErrorEvent*>(event.get());
                         std::cerr << "[App] Server error: " << err->code << " - " << err->message << "\n";

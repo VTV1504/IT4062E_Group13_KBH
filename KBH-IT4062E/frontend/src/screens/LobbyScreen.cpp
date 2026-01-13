@@ -409,7 +409,7 @@ void LobbyScreen::btn_ready_pressed() {
 
 void LobbyScreen::btn_start_pressed() {
     std::cout << "[LobbyScreen] Start button pressed\n";
-    app->network().send_start_game(50000); // 50 seconds default
+    app->network().send_start_game(60000); // 60 seconds
 }
 
 bool LobbyScreen::isSelfHost() const {
