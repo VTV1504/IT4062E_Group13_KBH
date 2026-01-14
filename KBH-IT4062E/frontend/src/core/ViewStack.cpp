@@ -20,6 +20,11 @@ void ViewStack::pop() {
     if (stack.empty()) return;
     stack.back()->onExit();
     stack.pop_back();
+    
+    // Notify view below that it's now active again
+    if (!stack.empty()) {
+        stack.back()->onResume();
+    }
 }
 
 void ViewStack::replaceTop(std::unique_ptr<View> v) {

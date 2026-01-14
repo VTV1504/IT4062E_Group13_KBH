@@ -25,6 +25,8 @@ public:
         double wpm = 0.0;
         double accuracy = 0.0;
         double progress = 0.0;
+        int total_correct_chars = 0;  // Cumulative correct characters
+        int total_chars = 0;           // Cumulative total characters typed
     };
     
     const PlayerMetrics* get_session(int player_id) const;

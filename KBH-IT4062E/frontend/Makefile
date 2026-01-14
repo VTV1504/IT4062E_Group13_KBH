@@ -1,7 +1,7 @@
 CXX      := g++
 CXXFLAGS := -std=c++17 -O2 -Wall -Wextra
 
-TARGET   := keyboard_hero_title.exe
+TARGET   := kbh_client.exe
 
 SRC_DIR  := src
 BUILD_DIR:= build

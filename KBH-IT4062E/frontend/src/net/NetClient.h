@@ -29,6 +29,10 @@ public:
     // Send messages (thread-safe)
     void send_time_sync(int64_t client_time_ms);
     void send_set_username(const std::string& username);
+    void send_sign_in(const std::string& username, const std::string& password);
+    void send_create_account(const std::string& username, const std::string& password);
+    void send_change_password(const std::string& username, const std::string& old_password, const std::string& new_password);
+    void send_sign_out();
     void send_create_room();
     void send_join_room(const std::string& room_id);
     void send_join_random();
@@ -37,6 +41,9 @@ public:
     void send_unready();
     void send_set_private(bool is_private);
     void send_start_game(int duration_ms = 50000);
+    void send_start_training();
+    void send_save_training_result(const std::string& paragraph, double wpm, double accuracy, 
+                                    int duration_ms, int words_committed);
     void send_input(const std::string& room_id, int word_idx, const Json::Value& char_events);
     void send_leaderboard();
     

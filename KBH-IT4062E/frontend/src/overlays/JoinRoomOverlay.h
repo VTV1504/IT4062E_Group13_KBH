@@ -7,6 +7,7 @@ class JoinRoomOverlay : public View {
 public:
     void onEnter() override;
     void onExit() override;
+    void onResume() override;
     void handleEvent(const SDL_Event& e) override;
     void update(float dt) override;
     void render(SDL_Renderer* r) override;

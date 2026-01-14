@@ -6,5 +6,5 @@ struct ClientConfig {
     int server_port = 5000;
     
     // Load from config file
-    static ClientConfig load(const std::string& config_path = "../config/server_config.json");
+    static ClientConfig load(const std::string& config_path = "client_config.json");
 };

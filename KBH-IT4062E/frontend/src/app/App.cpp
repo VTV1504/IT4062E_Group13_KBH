@@ -6,6 +6,10 @@
 #include "../ui/UiTheme.h"
 #include "../config/ClientConfig.h"
 #include "../overlays/JoinRoomOverlay.h"
+#include "../overlays/SignInOverlay.h"
+#include "../overlays/CreateAccountOverlay.h"
+#include "../overlays/ChangePasswordOverlay.h"
+#include "../overlays/GuestResultOverlay.h"
 #include "../core/Router.h"
 
 bool App::init() {
@@ -150,6 +154,121 @@ void App::run() {
                         // Connection established
                         std::cout << "[App] Received Hello from server\n";
                         break;
+                    
+                    case NetEventType::SignInResponse: {
+                        auto* resp = static_cast<SignInResponseEvent*>(event.get());
+                        if (resp->success) {
+                            std::cout << "[App] Sign in successful: user_id=" << resp->user_id 
+                                     << ", username=" << resp->username << "\n";
+                            st.setUser(resp->user_id, resp->username);
+                            
+                            // Check if we're signing in from GuestResultOverlay (training result pending)
+                            View* topView = viewStack.top();
+                            SignInOverlay* signInOverlay = dynamic_cast<SignInOverlay*>(topView);
+                            if (signInOverlay) {
+                                // Pop SignInOverlay
+                                defer([this, username = resp->username]() {
+                                    rt.pop();
+                                    
+                                    // Check if there's a GuestResultOverlay underneath
+                                    View* underView = viewStack.top();
+                                    if (dynamic_cast<GuestResultOverlay*>(underView)) {
+                                        // Replace GuestResultOverlay with UserResultOverlay
+                                        std::cout << "[App] Replacing GuestResultOverlay with UserResultOverlay\n";
+                                        
+                                        // Update display_name in GameEnd rankings to show correct username
+                                        if (st.hasGameEnd()) {
+                                            auto ge = st.getGameEnd();
+                                            if (!ge.rankings.empty()) {
+                                                ge.rankings[0].display_name = username;
+                                                st.setGameEnd(ge);
+                                                std::cout << "[App] Updated display_name to: " << username << "\n";
+                                                
+                                                // Save training result to backend
+                                                const auto& ranking = ge.rankings[0];
+                                                // Get paragraph from GameInit
+                                                if (st.hasGameInit()) {
+                                                    const auto& gi = st.getGameInit();
+                                                    std::cout << "[App] Sending save_training_result to backend\n";
+                                                    net.send_save_training_result(
+                                                        gi.paragraph,
+                                                        ranking.wpm,
+                                                        ranking.accuracy,
+                                                        (int)(ranking.latest_time_ms - gi.server_start_ms),
+                                                        ranking.word_idx
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        
+                                        rt.replaceTop(RouteId::UserResultOverlay);
+                                    }
+                                });
+                            } else {
+                                // Normal sign in, just pop
+                                defer([this]() {
+                                    rt.pop();
+                                });
+                            }
+                        } else {
+                            std::cerr << "[App] Sign in failed: " << resp->error_message << "\n";
+                            // Show error in SignInOverlay
+                            View* topView = viewStack.top();
+                            if (topView) {
+                                SignInOverlay* signInOverlay = dynamic_cast<SignInOverlay*>(topView);
+                                if (signInOverlay) {
+                                    signInOverlay->setError(resp->error_message);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    
+                    case NetEventType::CreateAccountResponse: {
+                        auto* resp = static_cast<CreateAccountResponseEvent*>(event.get());
+                        if (resp->success) {
+                            std::cout << "[App] Account created: " << resp->username 
+                                     << " - Please sign in\n";
+                            // Don't auto-login, user must sign in
+                            
+                            // Pop the CreateAccountOverlay
+                            defer([this]() {
+                                rt.pop();
+                            });
+                        } else {
+                            std::cerr << "[App] Create account failed: " << resp->error_message << "\n";
+                            // Show error in CreateAccountOverlay
+                            View* topView = viewStack.top();
+                            if (topView) {
+                                CreateAccountOverlay* createAccountOverlay = dynamic_cast<CreateAccountOverlay*>(topView);
+                                if (createAccountOverlay) {
+                                    createAccountOverlay->setError(resp->error_message);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    
+                    case NetEventType::ChangePasswordResponse: {
+                        auto* resp = static_cast<ChangePasswordResponseEvent*>(event.get());
+                        if (resp->success) {
+                            std::cout << "[App] Password changed successfully\n";
+                            
+                            // Pop the ChangePasswordOverlay
+                            defer([this]() {
+                                rt.pop();
+                            });
+                        } else {
+                            std::cerr << "[App] Change password failed: " << resp->error_message << "\n";
+                            
+                            // Show error in ChangePasswordOverlay
+                            View* topView = viewStack.top();
+                            if (auto* overlay = dynamic_cast<ChangePasswordOverlay*>(topView)) {
+                                overlay->setError(resp->error_message);
+                            }
+                        }
+                        break;
+                    }
                         
                     case NetEventType::RoomState: {
                         // Update room state
@@ -173,10 +292,19 @@ void App::run() {
                         st.setGameInit(*gi);
                         std::cout << "[App] Game init received, paragraph: " << gi->paragraph.substr(0, 50) << "...\n";
                         
-                        // Push GameScreen on top of LobbyScreen (keep lobby in stack)
-                        defer([this]() {
-                            rt.push(RouteId::Game);
-                        });
+                        // Check if training mode or arena mode
+                        if (gi->room_id == "training") {
+                            // Training: Navigate directly to GameScreen from TitleScreen
+                            std::cout << "[App] Training mode - navigating to Game\n";
+                            defer([this]() {
+                                rt.change(RouteId::Game);
+                            });
+                        } else {
+                            // Arena: Push GameScreen on top of LobbyScreen (keep lobby in stack)
+                            defer([this]() {
+                                rt.push(RouteId::Game);
+                            });
+                        }
                         break;
                     }
                     
@@ -198,13 +326,43 @@ void App::run() {
                         auto* ge = static_cast<GameEndEvent*>(event.get());
                         std::cout << "[App] Game ended: " << ge->reason << "\n";
                         
+                        // Debug: print rankings data
+                        std::cout << "[App] Rankings count: " << ge->rankings.size() << "\n";
+                        for (size_t i = 0; i < ge->rankings.size(); i++) {
+                            const auto& r = ge->rankings[i];
+                            std::cout << "[App] Ranking[" << i << "]: " << r.display_name 
+                                      << " WPM=" << r.wpm << " ACC=" << (r.accuracy * 100) << "%"
+                                      << " word_idx=" << r.word_idx << "\n";
+                        }
+                        
                         // Store game end event in state
                         st.setGameEnd(*ge);
                         
-                        // Push MatchResultOverlay on top of GameScreen
-                        defer([this]() {
-                            rt.push(RouteId::MatchResultOverlay);
-                        });
+                        // Check if this is training mode
+                        if (ge->room_id == "training") {
+                            // Training mode: check if user is logged in
+                            std::cout << "[App] Training mode ended, showing result\n";
+                            
+                            if (st.isUserAuthenticated()) {
+                                // Logged in: show UserResultOverlay
+                                std::cout << "[App] User logged in, showing UserResultOverlay\n";
+                                // TODO: Send save_training_result to backend
+                                defer([this]() {
+                                    rt.push(RouteId::UserResultOverlay);
+                                });
+                            } else {
+                                // Not logged in: show GuestResultOverlay
+                                std::cout << "[App] Guest user, showing GuestResultOverlay\n";
+                                defer([this]() {
+                                    rt.push(RouteId::GuestResultOverlay);
+                                });
+                            }
+                        } else {
+                            // Arena mode: push MatchResultOverlay on top of GameScreen
+                            defer([this]() {
+                                rt.push(RouteId::MatchResultOverlay);
+                            });
+                        }
                         break;
                     }
                     

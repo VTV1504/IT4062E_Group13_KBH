@@ -9,6 +9,7 @@ public:
 
     virtual void onEnter() {}
     virtual void onExit()  {}
+    virtual void onResume() {} // Called when view becomes active again after overlay pop
 
     virtual void handleEvent(const SDL_Event& e) = 0;
     virtual void update(float dt) = 0;

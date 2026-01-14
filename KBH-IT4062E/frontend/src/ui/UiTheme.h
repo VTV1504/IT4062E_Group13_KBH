@@ -11,6 +11,7 @@ namespace UiTheme {
     static constexpr const char* MainFontPath  = "res/fonts/Berylium Bd.otf";
     static constexpr const char* SubFontPath  = "res/fonts/dosis.medium.ttf";
     static constexpr const char* GameScreenBackground = "res/images/gamescreen_background.png";
+    static constexpr const char* ExitButtonPath = "res/images/ExitButton.png";
 
     // ====== Lobby screen file paths
     static constexpr const char* LobbyBgKnightPath = "res/images/logo_knight.png";   // big faint knight

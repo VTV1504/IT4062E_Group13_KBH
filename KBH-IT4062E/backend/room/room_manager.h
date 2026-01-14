@@ -27,6 +27,9 @@ public:
     // Returns the Room* if room still has players (for broadcasting),
     // or nullptr if room was deleted (empty)
     Room* remove_fd(int fd);
+    
+    // Getter for database (used by Server for authentication)
+    Database* db() const { return db_; }
 
 private:
     std::string generate_room_id();

@@ -234,8 +234,8 @@ void TitleScreen::onEnter() {
     std::cout << "[TitleScreen] Menu text created\n";
     
     // Update sign text based on login state
-    if (app->session().isLoggedIn()) {
-        signText = makeText(app->session().user().username, 58);
+    if (app->state().isUserAuthenticated()) {
+        signText = makeText(app->state().getUsername(), 58);
     } else {
         signText = makeText("Sign in / Sign up", 58);
     }
@@ -257,6 +257,13 @@ void TitleScreen::onEnter() {
 
     hoveredMenu = -1;
     hoveredSign = false;
+    
+    // Check if we should auto-start training (from Try Again)
+    if (app->state().shouldAutoStartTraining()) {
+        std::cout << "[TitleScreen] Auto-starting training...\n";
+        app->state().setAutoStartTraining(false);  // Reset flag
+        app->network().send_start_training();
+    }
 }
 
 void TitleScreen::onExit() {
@@ -287,15 +294,12 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
             else if (hoveredMenu == 1) {
                 app->router().push(RouteId::JoinRoomOverlay);
             }
-            // Training: tạo room private và start game ngay
+            // Training: send start_training và đợi game_init
             else if (hoveredMenu == 2) {
-                // Training mode: create private room and auto-start
-                app->state().setPendingMode(GameMode::Training);
-                app->network().send_create_room();
-                // Server will send room_state, then we'll be in lobby
-                // We'll need to auto-start from lobby after room creation
-                // For now, navigate to lobby and let user start manually
-                app->router().change(RouteId::Lobby);
+                std::cout << "[TitleScreen] Training clicked - sending start_training\n";
+                app->network().send_start_training();
+                // Server will send game_init with room_id="training"
+                // App will handle it and push GameScreen
             }
             // Leaderboard: gửi leaderboard request
             else if (hoveredMenu == 3) {
@@ -306,7 +310,7 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
         }
 
         if (hoveredSign) {
-            if (app->session().isLoggedIn()) app->router().change(RouteId::Profile);
+            if (app->state().isUserAuthenticated()) app->router().change(RouteId::Profile);
             else app->router().push(RouteId::SignInOverlay);
             return;
         }
@@ -320,11 +324,11 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
 void TitleScreen::render(SDL_Renderer* r) {
     // Update sign text based on current login state (in case it changed)
     static bool lastLoginState = false;
-    bool currentLoginState = app->session().isLoggedIn();
+    bool currentLoginState = app->state().isUserAuthenticated();
     if (lastLoginState != currentLoginState) {
         destroyText(signText);
         if (currentLoginState) {
-            signText = makeText(app->session().user().username, 58);
+            signText = makeText(app->state().getUsername(), 58);
         } else {
             signText = makeText("Sign in / Sign up", 58);
         }
@@ -363,7 +367,7 @@ void TitleScreen::render(SDL_Renderer* r) {
 
     // sign in text
     {
-        int sx = signRect.x;
+        int sx = signRect.x + 20;  // Add same padding as menu buttons
         int sy = signRect.y;
         SDL_Color c = hoveredSign ? UiTheme::Warm : UiTheme::Yellow;
         drawTextShadow(r, signText, sx, sy, c);

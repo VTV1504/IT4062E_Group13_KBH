@@ -180,6 +180,38 @@ std::unique_ptr<NetEvent> NetClient::parse_event(const Json::Value& json) {
             if (json.isMember("client_time_ms")) evt->client_time_ms = json["client_time_ms"].asInt64();
             return evt;
         }
+        
+        if (type == "sign_in_response") {
+            auto evt = std::make_unique<SignInResponseEvent>();
+            if (json.isMember("success")) evt->success = json["success"].asBool();
+            if (json.isMember("user_id")) evt->user_id = json["user_id"].asInt64();
+            if (json.isMember("username")) evt->username = json["username"].asString();
+            if (json.isMember("error")) evt->error_message = json["error"].asString();
+            else if (json.isMember("message")) evt->error_message = json["message"].asString();
+            return evt;
+        }
+        
+        if (type == "create_account_response") {
+            auto evt = std::make_unique<CreateAccountResponseEvent>();
+            if (json.isMember("success")) evt->success = json["success"].asBool();
+            if (json.isMember("user_id")) evt->user_id = json["user_id"].asInt64();
+            if (json.isMember("username")) evt->username = json["username"].asString();
+            if (json.isMember("error")) evt->error_message = json["error"].asString();
+            else if (json.isMember("message")) evt->error_message = json["message"].asString();
+            return evt;
+        }
+        
+        if (type == "change_password_response") {
+            auto evt = std::make_unique<ChangePasswordResponseEvent>();
+            if (json.isMember("success")) evt->success = json["success"].asBool();
+            // Read both "error" and "message" for backward compatibility
+            if (json.isMember("error")) {
+                evt->error_message = json["error"].asString();
+            } else if (json.isMember("message")) {
+                evt->error_message = json["message"].asString();
+            }
+            return evt;
+        }
     
     if (type == "room_state") {
         auto evt = std::make_unique<RoomStateEvent>();
@@ -349,6 +381,63 @@ void NetClient::send_set_username(const std::string& username) {
     send_json_internal(msg);
 }
 
+void NetClient::send_sign_in(const std::string& username, const std::string& password) {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send sign_in.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "sign_in";
+    msg["username"] = username;
+    msg["password"] = password;
+    send_json_internal(msg);
+}
+
+void NetClient::send_create_account(const std::string& username, const std::string& password) {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send create_account.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "create_account";
+    msg["username"] = username;
+    msg["password"] = password;
+    send_json_internal(msg);
+}
+
+void NetClient::send_change_password(const std::string& username, const std::string& old_password, const std::string& new_password) {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send change_password.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "change_password";
+    msg["username"] = username;
+    msg["old_password"] = old_password;
+    msg["new_password"] = new_password;
+    send_json_internal(msg);
+}
+
+void NetClient::send_sign_out() {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send sign_out.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "sign_out";
+    send_json_internal(msg);
+    
+    std::cout << "[NetClient] Sent sign_out request\n";
+}
+
 void NetClient::send_create_room() {
     if (!connected_) {
         std::cerr << "[NetClient] Error: Not connected to server. Cannot send create_room.\n";
@@ -445,6 +534,36 @@ void NetClient::send_start_game(int duration_ms) {
     Json::Value msg;
     msg["type"] = "start_game";
     msg["duration_ms"] = duration_ms;
+    send_json_internal(msg);
+}
+
+void NetClient::send_start_training() {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send start_training.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "start_training";
+    send_json_internal(msg);
+}
+
+void NetClient::send_save_training_result(const std::string& paragraph, double wpm, double accuracy,
+                                           int duration_ms, int words_committed) {
+    if (!connected_) {
+        std::cerr << "[NetClient] Error: Not connected to server. Cannot send save_training_result.\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(send_mutex_);
+    
+    Json::Value msg;
+    msg["type"] = "save_training_result";
+    msg["paragraph"] = paragraph;
+    msg["wpm"] = wpm;
+    msg["accuracy"] = accuracy;
+    msg["duration_ms"] = duration_ms;
+    msg["words_committed"] = words_committed;
     send_json_internal(msg);
 }
 

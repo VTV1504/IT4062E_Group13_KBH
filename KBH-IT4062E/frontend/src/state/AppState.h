@@ -11,6 +11,21 @@ public:
     bool hasLastGameResult() const { return hasResult; }
     const GameResult& getLastResult() const { return lastResult; }
     
+    // User authentication
+    void setUser(int64_t id, const std::string& name) { 
+        userId = id; 
+        username = name; 
+        isAuthenticated = true; 
+    }
+    void clearUser() { 
+        userId = -1; 
+        username.clear(); 
+        isAuthenticated = false; 
+    }
+    bool isUserAuthenticated() const { return isAuthenticated; }
+    int64_t getUserId() const { return userId; }
+    const std::string& getUsername() const { return username; }
+    
     // Room state
     void setRoomState(const RoomStateEvent& rs) { roomState = rs; hasRoomState = true; }
     bool hasRoom() const { return hasRoomState; }
@@ -32,11 +47,20 @@ public:
     bool hasGameEnd() const { return hasGameEnd_; }
     const GameEndEvent& getGameEnd() const { return gameEnd; }
     void clearGameEnd() { hasGameEnd_ = false; }
+    
+    // Auto-start training flag (for Try Again)
+    void setAutoStartTraining(bool val) { autoStartTraining_ = val; }
+    bool shouldAutoStartTraining() const { return autoStartTraining_; }
 
 private:
     GameMode pendingMode = GameMode::Training;
     bool hasResult = false;
     GameResult lastResult{};
+    
+    // User authentication
+    bool isAuthenticated = false;
+    int64_t userId = -1;
+    std::string username;
     
     bool hasRoomState = false;
     RoomStateEvent roomState;
@@ -49,4 +73,6 @@ private:
     
     bool hasGameEnd_ = false;
     GameEndEvent gameEnd;
+    
+    bool autoStartTraining_ = false;
 };

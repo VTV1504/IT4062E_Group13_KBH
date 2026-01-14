@@ -21,11 +21,19 @@ void JoinRoomOverlay::onEnter() {
     joinBtnRect = {555, 446, 426, 90};
     randomBtnRect = {555, 616, 426, 90};
     inputRect = {684, 238, 650, 116};
+    
+    SDL_StartTextInput();
 }
 
 void JoinRoomOverlay::onExit() {
     room_code.clear();
     clear_error();
+    SDL_StopTextInput();
+}
+
+void JoinRoomOverlay::onResume() {
+    // Restart text input when returning from another overlay
+    SDL_StartTextInput();
 }
 
 void JoinRoomOverlay::windowToLogical(int wx, int wy, int& lx, int& ly) const {

@@ -7,6 +7,9 @@
 enum class NetEventType {
     Hello,
     TimeSync,
+    SignInResponse,
+    CreateAccountResponse,
+    ChangePasswordResponse,
     RoomState,
     GameInit,
     GameState,
@@ -33,6 +36,31 @@ struct TimeSyncEvent : NetEvent {
     int client_id = 0;
     int64_t server_time_ms = 0;
     int64_t client_time_ms = 0;
+};
+
+// sign_in_response
+struct SignInResponseEvent : NetEvent {
+    SignInResponseEvent() { type = NetEventType::SignInResponse; }
+    bool success = false;
+    int64_t user_id = -1;
+    std::string username;
+    std::string error_message;
+};
+
+// create_account_response
+struct CreateAccountResponseEvent : NetEvent {
+    CreateAccountResponseEvent() { type = NetEventType::CreateAccountResponse; }
+    bool success = false;
+    int64_t user_id = -1;
+    std::string username;
+    std::string error_message;
+};
+
+// change_password_response
+struct ChangePasswordResponseEvent : NetEvent {
+    ChangePasswordResponseEvent() { type = NetEventType::ChangePasswordResponse; }
+    bool success = false;
+    std::string error_message;
 };
 
 // room_state

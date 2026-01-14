@@ -60,17 +60,23 @@ void TypingEngine::process_input(int player_id, int word_idx, const Json::Value&
         // SPACE is not counted
     }
     
-    // Update cumulative accuracy (simple average for now)
-    if (total > 0) {
-        double word_accuracy = (double)correct * 100.0 / total;
-        // Running average: update accuracy based on word count
-        pm.accuracy = (pm.accuracy * word_idx + word_accuracy) / (word_idx + 1);
+    // Update cumulative counters
+    pm.total_correct_chars += correct;
+    pm.total_chars += total;
+    
+    // Compute accuracy from cumulative data
+    if (pm.total_chars > 0) {
+        pm.accuracy = (double)pm.total_correct_chars / pm.total_chars;
+    } else {
+        pm.accuracy = 1.0;  // 100% if no chars typed yet
     }
     
-    // Compute WPM
+    // Compute WPM from cumulative correct chars
     if (latest_time_ms > 0) {
         double elapsed_seconds = latest_time_ms / 1000.0;
-        pm.wpm = (correct / 5.0) / (elapsed_seconds / 60.0);
+        if (elapsed_seconds > 0) {
+            pm.wpm = (pm.total_correct_chars / 5.0) / (elapsed_seconds / 60.0);
+        }
     }
     
     // Progress
