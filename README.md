@@ -99,7 +99,6 @@ Initialize database schema:
 ```bash
 cd KBH-IT4062E/database
 psql -U kbh_user -d kbh_db -f New_DB.sql
-psql -U kbh_user -d kbh_db -f paragraph_seed.sql
 ```
 
 ### 2. Configure Server
@@ -204,27 +203,27 @@ Expected output:
 IT4062E_Group13_KBH/
 ├── README.md
 ├── NETWORK_PROTOCOL.md          # Detailed protocol specification
-├── KBH-IT4062E/
-│   ├── backend/                 # Server code
-│   │   ├── server/              # Network server
-│   │   ├── room/                # Room management
-│   │   ├── database/            # PostgreSQL integration
-│   │   ├── typing_engine/       # Typing metrics calculation
-│   │   ├── gamemode/            # Game mode implementations
-│   │   └── Makefile
-│   ├── frontend/                # Client code
-│   │   ├── src/
-│   │   │   ├── app/             # Main application
-│   │   │   ├── screens/         # Game screens
-│   │   │   ├── overlays/        # UI overlays
-│   │   │   ├── net/             # Network client
-│   │   │   ├── typing/          # Typing engine
-│   │   │   └── ui/              # UI utilities
-│   │   ├── res/                 # Assets (fonts, images)
-│   │   └── Makefile
-│   ├── config/                  # Configuration files
-│   └── database/                # SQL schema and seeds
-└── Prompt.txt                   # Development notes
+└── KBH-IT4062E/
+    ├── backend/                 # Server code
+    │   ├── server/              # Network server
+    │   ├── room/                # Room management
+    │   ├── database/            # PostgreSQL integration
+    │   ├── typing_engine/       # Typing metrics calculation
+    │   ├── gamemode/            # Game mode implementations
+    │   └── Makefile
+    ├── frontend/                # Client code
+    │   ├── src/
+    │   │   ├── app/             # Main application
+    │   │   ├── screens/         # Game screens
+    │   │   ├── overlays/        # UI overlays
+    │   │   ├── net/             # Network client
+    │   │   ├── typing/          # Typing engine
+    │   │   └── ui/              # UI utilities
+    │   ├── res/                 # Assets (fonts, images)
+    │   └── Makefile
+    ├── config/                  # Configuration files
+    └── database/                # SQL schema and seeds
+
 ```
 
 ## Features
