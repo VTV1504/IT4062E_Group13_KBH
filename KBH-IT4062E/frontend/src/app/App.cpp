@@ -139,6 +139,11 @@ void App::run() {
             viewStack.handleEvent(e);
         }
         
+        // Exit immediately if quit was requested
+        if (quitRequested) {
+            break;
+        }
+        
         // Poll network events (limit to 10 per frame to avoid blocking SDL events)
         int maxNetEvents = 10;
         while (net.has_events() && maxNetEvents-- > 0) {
@@ -366,6 +371,20 @@ void App::run() {
                         break;
                     }
                     
+                    case NetEventType::LeaderboardResponse: {
+                        auto* lb = static_cast<LeaderboardResponseEvent*>(event.get());
+                        std::cout << "[App] Received leaderboard with " << lb->top8.size() << " entries\n";
+                        
+                        // Store in session state
+                        st.setLeaderboard(*lb);
+                        
+                        // Push overlay
+                        defer([this]() {
+                            rt.push(RouteId::LeaderboardOverlay);
+                        });
+                        break;
+                    }
+                    
                     case NetEventType::Error: {
                         auto* err = static_cast<ErrorEvent*>(event.get());
                         std::cerr << "[App] Server error: " << err->code << " - " << err->message << "\n";
@@ -400,16 +419,22 @@ void App::run() {
 }
 
 void App::shutdown() {
+    std::cout << "[App] shutdown() - Disconnecting from server...\n";
     // Disconnect from server
     net.disconnect();
     
+    std::cout << "[App] shutdown() - Cleaning up resources...\n";
     // Clean up resources safely
     res.shutdown();
 
+    std::cout << "[App] shutdown() - Destroying renderer and window...\n";
     if (ren) SDL_DestroyRenderer(ren);
     if (win) SDL_DestroyWindow(win);
 
+    std::cout << "[App] shutdown() - Quitting SDL subsystems...\n";
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
+    
+    std::cout << "[App] shutdown() - Complete\n";
 }

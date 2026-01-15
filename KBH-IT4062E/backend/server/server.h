@@ -39,6 +39,7 @@ private:
     void on_start_game(int fd, const Json::Value& msg);
     void on_start_training(int fd);
     void on_save_training_result(int fd, const Json::Value& msg);
+    void on_leaderboard(int fd);
     void on_input(int fd, const Json::Value& msg);
     
     // Helper to broadcast room_state

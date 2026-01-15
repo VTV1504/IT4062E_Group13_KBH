@@ -73,14 +73,19 @@ bool NetClient::connect(const std::string& ip, int port) {
 void NetClient::disconnect() {
     if (!connected_) return;
     
+    std::cout << "[NetClient] Disconnecting...\n";
+    
     should_stop_ = true;
     connected_ = false;
     
+    // Close socket first to unblock recv()
     if (sockfd_ >= 0) {
+        shutdown(sockfd_, SHUT_RDWR);  // Shutdown both read and write
         close(sockfd_);
         sockfd_ = -1;
     }
     
+    // Now thread should exit from recv() with error
     if (recv_thread_.joinable()) {
         recv_thread_.join();
     }
@@ -305,6 +310,33 @@ std::unique_ptr<NetEvent> NetClient::parse_event(const Json::Value& json) {
                 evt->rankings.push_back(rank);
             }
         }
+        return evt;
+    }
+    
+    if (type == "leaderboard_response") {
+        auto evt = std::make_unique<LeaderboardResponseEvent>();
+        
+        // Parse top8 array
+        if (json.isMember("top8") && json["top8"].isArray()) {
+            for (const auto& entry : json["top8"]) {
+                LeaderboardEntry le;
+                if (entry.isMember("rank")) le.rank = entry["rank"].asInt();
+                if (entry.isMember("username")) le.username = entry["username"].asString();
+                if (entry.isMember("wpm")) le.wpm = entry["wpm"].asDouble();
+                evt->top8.push_back(le);
+            }
+        }
+        
+        // Parse self_rank (null or object)
+        if (json.isMember("self_rank") && !json["self_rank"].isNull()) {
+            const auto& sr = json["self_rank"];
+            if (sr.isMember("rank")) evt->self_rank.rank = sr["rank"].asInt();
+            if (sr.isMember("username")) evt->self_rank.username = sr["username"].asString();
+            if (sr.isMember("wpm")) evt->self_rank.wpm = sr["wpm"].asDouble();
+        } else {
+            evt->self_rank.rank = 0;  // Not found/guest
+        }
+        
         return evt;
     }
     

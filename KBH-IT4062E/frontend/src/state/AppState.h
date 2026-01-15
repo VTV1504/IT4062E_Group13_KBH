@@ -48,6 +48,22 @@ public:
     const GameEndEvent& getGameEnd() const { return gameEnd; }
     void clearGameEnd() { hasGameEnd_ = false; }
     
+    // Leaderboard
+    void setLeaderboard(const LeaderboardResponseEvent& lb) { 
+        if (leaderboard) delete leaderboard;
+        leaderboard = new LeaderboardResponseEvent(lb); 
+        hasLeaderboard_ = true; 
+    }
+    bool hasLeaderboard() const { return hasLeaderboard_; }
+    const LeaderboardResponseEvent& getLeaderboard() const { return *leaderboard; }
+    void clearLeaderboard() { 
+        if (leaderboard) {
+            delete leaderboard;
+            leaderboard = nullptr;
+        }
+        hasLeaderboard_ = false; 
+    }
+    
     // Auto-start training flag (for Try Again)
     void setAutoStartTraining(bool val) { autoStartTraining_ = val; }
     bool shouldAutoStartTraining() const { return autoStartTraining_; }
@@ -73,6 +89,9 @@ private:
     
     bool hasGameEnd_ = false;
     GameEndEvent gameEnd;
+    
+    bool hasLeaderboard_ = false;
+    LeaderboardResponseEvent* leaderboard = nullptr;
     
     bool autoStartTraining_ = false;
 };

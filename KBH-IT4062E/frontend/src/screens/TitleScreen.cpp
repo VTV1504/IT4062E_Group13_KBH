@@ -301,10 +301,10 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
                 // Server will send game_init with room_id="training"
                 // App will handle it and push GameScreen
             }
-            // Leaderboard: gửi leaderboard request
+            // Leaderboard: gửi request, đợi response rồi mới mở overlay
             else if (hoveredMenu == 3) {
                 app->network().send_leaderboard();
-                app->router().push(RouteId::LeaderboardOverlay);
+                // App will push overlay when leaderboard_response arrives
             }
             return;
         }

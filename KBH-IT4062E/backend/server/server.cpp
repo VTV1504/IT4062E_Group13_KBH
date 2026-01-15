@@ -163,6 +163,8 @@ void Server::handle_message(int fd, const Json::Value& msg) {
         on_start_training(fd);
     } else if (type == "save_training_result") {
         on_save_training_result(fd, msg);
+    } else if (type == "leaderboard") {
+        on_leaderboard(fd);
     } else if (type == "input") {
         on_input(fd, msg);
     } else {
@@ -994,4 +996,55 @@ void Server::on_sign_out(int fd) {
     response["type"] = "sign_out_response";
     response["success"] = true;
     send_json(fd, response);
+}
+
+void Server::on_leaderboard(int fd) {
+    auto it = clients_.find(fd);
+    if (it == clients_.end()) {
+        return;
+    }
+    
+    // Get top 8 players from last week
+    std::vector<LeaderboardEntry> top_players = room_manager_.db()->get_top_players(8);
+    
+    // Get self rank if user is logged in
+    LeaderboardEntry self_rank{0, "", 0.0};
+    if (it->second.user_id > 0) {
+        self_rank = room_manager_.db()->get_user_rank(it->second.user_id);
+    }
+    
+    // Build response
+    Json::Value response;
+    response["type"] = "leaderboard_response";
+    
+    // Add top 8
+    Json::Value top8(Json::arrayValue);
+    for (const auto& entry : top_players) {
+        Json::Value item;
+        item["rank"] = entry.rank;
+        item["username"] = entry.username;
+        item["wpm"] = entry.wpm;
+        top8.append(item);
+    }
+    response["top8"] = top8;
+    
+    // Add self rank (null if not found or guest)
+    if (self_rank.rank > 0) {
+        Json::Value self;
+        self["rank"] = self_rank.rank;
+        self["username"] = self_rank.username;
+        self["wpm"] = self_rank.wpm;
+        response["self_rank"] = self;
+    } else {
+        response["self_rank"] = Json::Value::null;
+    }
+    
+    send_json(fd, response);
+    std::cout << "[SERVER] Sent leaderboard (top " << top_players.size() 
+              << " entries) to client " << fd;
+    if (it->second.user_id > 0) {
+        std::cout << " (user: " << it->second.username 
+                  << ", rank: " << (self_rank.rank > 0 ? std::to_string(self_rank.rank) : "unranked") << ")";
+    }
+    std::cout << "\n";
 }

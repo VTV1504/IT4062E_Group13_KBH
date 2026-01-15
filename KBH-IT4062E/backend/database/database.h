@@ -5,6 +5,12 @@
 #include <vector>
 #include <pqxx/pqxx>
 
+struct LeaderboardEntry {
+    int rank;
+    std::string username;
+    double wpm;
+};
+
 class Database {
 public:
     // Constructor
@@ -34,6 +40,10 @@ public:
     std::pair<int64_t, std::string> authenticate(const std::string& username, const std::string& password);
     int64_t create_user(const std::string& username, const std::string& password);
     bool change_password(const std::string& username, const std::string& old_password, const std::string& new_password);
+    
+    // Leaderboard methods
+    std::vector<LeaderboardEntry> get_top_players(int limit = 8);
+    LeaderboardEntry get_user_rank(int64_t user_id);
 
 private:
     pqxx::connection* conn_;

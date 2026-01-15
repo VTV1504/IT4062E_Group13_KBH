@@ -44,7 +44,9 @@ std::unique_ptr<View> Router::make(RouteId id) {
 
         case RouteId::EnterRoomOverlay:    return std::make_unique<EnterRoomOverlay>();
         case RouteId::JoinRoomOverlay:     return std::make_unique<JoinRoomOverlay>();
-        case RouteId::LeaderboardOverlay:  return std::make_unique<LeaderboardOverlay>();
+        case RouteId::LeaderboardOverlay:  
+            std::cout << "[Router] Creating LeaderboardOverlay\n";
+            return std::make_unique<LeaderboardOverlay>();
         case RouteId::SignInOverlay:       return std::make_unique<SignInOverlay>();
         case RouteId::CreateAccountOverlay:return std::make_unique<CreateAccountOverlay>();
         case RouteId::ChangePasswordOverlay:return std::make_unique<ChangePasswordOverlay>();

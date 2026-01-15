@@ -256,3 +256,93 @@ bool Database::save_training_result(int64_t user_id, const std::string& paragrap
         return false;
     }
 }
+
+// -------------------------------------------
+// Get top players in the last week
+// -------------------------------------------
+std::vector<LeaderboardEntry> Database::get_top_players(int limit) {
+    std::vector<LeaderboardEntry> entries;
+    
+    try {
+        pqxx::work txn(*conn_);
+        
+        // Get top players from last 7 days, ordered by max WPM
+        pqxx::result r = txn.exec_params(
+            "WITH ranked_results AS ( "
+            "  SELECT "
+            "    u.username, "
+            "    MAX(gr.wpm) as best_wpm, "
+            "    RANK() OVER (ORDER BY MAX(gr.wpm) DESC) as rank "
+            "  FROM game_result gr "
+            "  JOIN app_user u ON u.user_id = gr.user_id "
+            "  WHERE gr.created_at >= NOW() - INTERVAL '7 days' "
+            "    AND gr.user_id IS NOT NULL "
+            "  GROUP BY u.username "
+            ") "
+            "SELECT rank, username, best_wpm "
+            "FROM ranked_results "
+            "ORDER BY rank "
+            "LIMIT $1",
+            limit
+        );
+        
+        for (const auto& row : r) {
+            LeaderboardEntry entry;
+            entry.rank = row["rank"].as<int>();
+            entry.username = row["username"].as<std::string>();
+            entry.wpm = row["best_wpm"].as<double>();
+            entries.push_back(entry);
+        }
+        
+        txn.commit();
+    }
+    catch (const std::exception& e) {
+        std::cerr << "DB get_top_players error: " << e.what() << std::endl;
+    }
+    
+    return entries;
+}
+
+// -------------------------------------------
+// Get user rank in the last week
+// -------------------------------------------
+LeaderboardEntry Database::get_user_rank(int64_t user_id) {
+    LeaderboardEntry entry{0, "", 0.0};  // rank=0 means not found
+    
+    try {
+        pqxx::work txn(*conn_);
+        
+        // Get user's rank based on best WPM in last 7 days
+        pqxx::result r = txn.exec_params(
+            "WITH ranked_results AS ( "
+            "  SELECT "
+            "    gr.user_id, "
+            "    u.username, "
+            "    MAX(gr.wpm) as best_wpm, "
+            "    RANK() OVER (ORDER BY MAX(gr.wpm) DESC) as rank "
+            "  FROM game_result gr "
+            "  JOIN app_user u ON u.user_id = gr.user_id "
+            "  WHERE gr.created_at >= NOW() - INTERVAL '7 days' "
+            "    AND gr.user_id IS NOT NULL "
+            "  GROUP BY gr.user_id, u.username "
+            ") "
+            "SELECT rank, username, best_wpm "
+            "FROM ranked_results "
+            "WHERE user_id = $1",
+            user_id
+        );
+        
+        if (!r.empty()) {
+            entry.rank = r[0]["rank"].as<int>();
+            entry.username = r[0]["username"].as<std::string>();
+            entry.wpm = r[0]["best_wpm"].as<double>();
+        }
+        
+        txn.commit();
+    }
+    catch (const std::exception& e) {
+        std::cerr << "DB get_user_rank error: " << e.what() << std::endl;
+    }
+    
+    return entry;
+}

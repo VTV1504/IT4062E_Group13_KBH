@@ -14,6 +14,7 @@ enum class NetEventType {
     GameInit,
     GameState,
     GameEnd,
+    LeaderboardResponse,
     Error,
     Info
 };
@@ -140,6 +141,19 @@ struct GameEndEvent : NetEvent {
     std::string room_id;
     std::string reason; // "timeout" or "all_finished"
     std::vector<RankingData> rankings;
+};
+
+// leaderboard_response
+struct LeaderboardEntry {
+    int rank = 0;
+    std::string username;
+    double wpm = 0.0;
+};
+
+struct LeaderboardResponseEvent : NetEvent {
+    LeaderboardResponseEvent() { type = NetEventType::LeaderboardResponse; }
+    std::vector<LeaderboardEntry> top8;
+    LeaderboardEntry self_rank;  // rank=0 means not found/guest
 };
 
 // error
