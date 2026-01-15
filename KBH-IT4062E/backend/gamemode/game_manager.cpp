@@ -34,12 +34,6 @@ void GameManager::start_game(const std::string& mode) {
 
         current_mode = new ArenaMode(text);
     }
-    else if (mode == "SelfTraining") {
-        current_mode = new SelfTrainingMode();
-    }
-    else if (mode == "Survival") {
-        current_mode = new SurvivalMode();
-    }
     else {
         std::cerr << "Invalid mode: " << mode << "\n";
         return;

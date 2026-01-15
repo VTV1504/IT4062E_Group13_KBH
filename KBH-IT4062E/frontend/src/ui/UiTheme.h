@@ -10,6 +10,25 @@ namespace UiTheme {
     static constexpr const char* TitleLogoPath = "res/images/logo_fin.png";
     static constexpr const char* MainFontPath  = "res/fonts/Berylium Bd.otf";
     static constexpr const char* SubFontPath  = "res/fonts/dosis.medium.ttf";
+    static constexpr const char* GameScreenBackground = "res/images/gamescreen_background.png";
+    static constexpr const char* ExitButtonPath = "res/images/ExitButton.png";
+
+    // ====== Lobby screen file paths
+    static constexpr const char* LobbyBgKnightPath = "res/images/logo_knight.png";   // big faint knight
+    static constexpr const char* LobbyReadyTickPath = "res/images/ready.png"; // 73x73 tick
+    static constexpr const char* LobbyLockPath = "res/images/private_small.png";     // 76x84 lock
+    static constexpr const char* LobbyCopyIconPath = "res/images/copy.png";            // optional
+
+    static constexpr const char* LobbyKnightPaths[8] = {
+        "res/images/lightblue_full.png",
+        "res/images/black_full.png",
+        "res/images/brown_full.png",
+        "res/images/red_full.png",
+        "res/images/blue_full.png",
+        "res/images/pink_full.png",
+        "res/images/spartan_full.png",
+        "res/images/yellow_full.png"
+    };
 
     static constexpr SDL_Color White {255,255,255,255};
     static constexpr SDL_Color Warm  {255,245,200,255};

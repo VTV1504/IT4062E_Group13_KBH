@@ -12,8 +12,6 @@ CXXFLAGS += \
 	-Ityping_engine \
 	-Igamemode \
 	-Igamemode/arena \
-	-Igamemode/self_training \
-	-Igamemode/survival \
 	-Idatabase \
 	-Iconfig
 
@@ -23,17 +21,15 @@ LDFLAGS := -ljsoncpp -lpqxx -lpq
 # Target
 TARGET := kbh_server
 
-# Source directories (typing_engine chưa dùng)
+# Source directories
 SRC_DIRS := \
 	config \
 	database \
 	gamemode \
 	gamemode/arena \
-	gamemode/self_training \
-	gamemode/survival \
 	room \
-	typing_engine \
-	server
+	server \
+	typing_engine
 
 # Main
 MAIN_SRCS := main.cpp

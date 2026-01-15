@@ -9,12 +9,14 @@ enum class RouteId {
     Profile,
 
     EnterRoomOverlay,
+    JoinRoomOverlay,
     LeaderboardOverlay,
     SignInOverlay,
     CreateAccountOverlay,
     ChangePasswordOverlay,
     GuestResultOverlay,
-    UserResultOverlay
+    UserResultOverlay,
+    MatchResultOverlay
 };
 
 class App;

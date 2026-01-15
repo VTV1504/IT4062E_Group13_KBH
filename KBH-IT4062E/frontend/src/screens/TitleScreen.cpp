@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
 
 static bool pointInRect(int x, int y, const SDL_Rect& r) {
     return (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
@@ -216,17 +217,28 @@ void TitleScreen::drawHoverButton(SDL_Renderer* r, const SDL_Rect& outer) {
 }
 
 void TitleScreen::onEnter() {
+    std::cout << "[TitleScreen] onEnter() called\n";
+    std::cout << "[TitleScreen] Loading textures...\n";
     bg   = app->resources().texture(UiTheme::TitleBgPath);
     logo = app->resources().texture(UiTheme::TitleLogoPath);
+    std::cout << "[TitleScreen] Textures loaded\n";
 
     menuText.clear();
     menuRect.clear();
 
+    std::cout << "[TitleScreen] Creating menu text...\n";
     for (auto& s : labels) {
         menuText.push_back(makeText(s, 64));
         menuRect.push_back(SDL_Rect{0,0,0,0});
     }
-    signText = makeText("Sign in / Sign up", 58);
+    std::cout << "[TitleScreen] Menu text created\n";
+    
+    // Update sign text based on login state
+    if (app->state().isUserAuthenticated()) {
+        signText = makeText(app->state().getUsername(), 58);
+    } else {
+        signText = makeText("Sign in / Sign up", 58);
+    }
 
     // ====== TỌA ĐỘ THEO BẠN ======
     // Create Room: x=77, y=403
@@ -245,6 +257,13 @@ void TitleScreen::onEnter() {
 
     hoveredMenu = -1;
     hoveredSign = false;
+    
+    // Check if we should auto-start training (from Try Again)
+    if (app->state().shouldAutoStartTraining()) {
+        std::cout << "[TitleScreen] Auto-starting training...\n";
+        app->state().setAutoStartTraining(false);  // Reset flag
+        app->network().send_start_training();
+    }
 }
 
 void TitleScreen::onExit() {
@@ -266,15 +285,32 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
         updateHoverFromMouse(e.button.x, e.button.y);
 
         if (hoveredMenu != -1) {
-            if (hoveredMenu == 0) app->router().change(RouteId::Lobby);
-            else if (hoveredMenu == 1) app->router().push(RouteId::EnterRoomOverlay);
-            else if (hoveredMenu == 2) { app->state().setPendingMode(GameMode::Training); app->router().change(RouteId::Game); }
-            else if (hoveredMenu == 3) app->router().push(RouteId::LeaderboardOverlay);
+            // Create Room: gửi create_room và chuyển màn lobby
+            if (hoveredMenu == 0) {
+                app->network().send_create_room();
+                app->router().change(RouteId::Lobby);
+            }
+            // Join Room: mở JoinRoomOverlay mới
+            else if (hoveredMenu == 1) {
+                app->router().push(RouteId::JoinRoomOverlay);
+            }
+            // Training: send start_training và đợi game_init
+            else if (hoveredMenu == 2) {
+                std::cout << "[TitleScreen] Training clicked - sending start_training\n";
+                app->network().send_start_training();
+                // Server will send game_init with room_id="training"
+                // App will handle it and push GameScreen
+            }
+            // Leaderboard: gửi request, đợi response rồi mới mở overlay
+            else if (hoveredMenu == 3) {
+                app->network().send_leaderboard();
+                // App will push overlay when leaderboard_response arrives
+            }
             return;
         }
 
         if (hoveredSign) {
-            if (app->session().isLoggedIn()) app->router().change(RouteId::Profile);
+            if (app->state().isUserAuthenticated()) app->router().change(RouteId::Profile);
             else app->router().push(RouteId::SignInOverlay);
             return;
         }
@@ -286,6 +322,19 @@ void TitleScreen::handleEvent(const SDL_Event& e) {
 }
 
 void TitleScreen::render(SDL_Renderer* r) {
+    // Update sign text based on current login state (in case it changed)
+    static bool lastLoginState = false;
+    bool currentLoginState = app->state().isUserAuthenticated();
+    if (lastLoginState != currentLoginState) {
+        destroyText(signText);
+        if (currentLoginState) {
+            signText = makeText(app->state().getUsername(), 58);
+        } else {
+            signText = makeText("Sign in / Sign up", 58);
+        }
+        lastLoginState = currentLoginState;
+    }
+    
     // background
     if (bg) {
         SDL_Rect dst{0,0,UiTheme::DesignW,UiTheme::DesignH};
@@ -318,7 +367,7 @@ void TitleScreen::render(SDL_Renderer* r) {
 
     // sign in text
     {
-        int sx = signRect.x;
+        int sx = signRect.x + 20;  // Add same padding as menu buttons
         int sy = signRect.y;
         SDL_Color c = hoveredSign ? UiTheme::Warm : UiTheme::Yellow;
         drawTextShadow(r, signText, sx, sy, c);

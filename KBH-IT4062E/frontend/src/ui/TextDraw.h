@@ -6,16 +6,22 @@
 
 inline void drawText(SDL_Renderer* r, TTF_Font* font, const std::string& text,
                      int x, int y, SDL_Color color) {
-    if (!font) return;
+    if (!font || text.empty()) return;
+    
     SDL_Surface* s = TTF_RenderUTF8_Blended(font, text.c_str(), color);
     if (!s) return;
+    
     SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+    if (!t) {
+        SDL_FreeSurface(s);
+        return;
+    }
+    
     SDL_Rect dst{ x, y, s->w, s->h };
     SDL_FreeSurface(s);
-    if (t) {
-        SDL_RenderCopy(r, t, nullptr, &dst);
-        SDL_DestroyTexture(t);
-    }
+    
+    SDL_RenderCopy(r, t, nullptr, &dst);
+    SDL_DestroyTexture(t);
 }
 
 inline void drawOverlayDim(SDL_Renderer* r, Uint8 alpha = 160) {
